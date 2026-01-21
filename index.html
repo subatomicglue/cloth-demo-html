@@ -2,105 +2,337 @@
 <html lang="en">
 <head>
   <meta charset="utf-8" />
-  <title>Cloth Simulation – Demo Index</title>
+  <title>Cloth Simulation</title>
   <meta name="viewport" content="width=device-width, initial-scale=1" />
   <style>
+    :root {
+      --ink: #0e0c0a;
+      --paper: #f7f2ea;
+      --accent: #0f6b5b;
+      --accent-2: #c46a2a;
+      --panel: rgba(247, 242, 234, 0.92);
+      --panel-border: rgba(14, 12, 10, 0.2);
+      --shadow: rgba(14, 12, 10, 0.14);
+      --mono: "SFMono-Regular", Menlo, Monaco, Consolas, "Liberation Mono", monospace;
+      --ui: "Avenir Next", "Gill Sans", "Trebuchet MS", sans-serif;
+      --title: "Iowan Old Style", "Palatino", "Garamond", serif;
+    }
+
+    * {
+      box-sizing: border-box;
+    }
+
     html, body {
       margin: 0;
-      padding: 0;
-      background: #ffffff;
-      color: #000000;
-      font-family: system-ui, -apple-system, BlinkMacSystemFont, "Segoe UI", sans-serif;
+      height: 100%;
+      background: radial-gradient(circle at 20% 10%, #fff6e5, #f7f2ea 45%, #efe6d7 100%);
+      color: var(--ink);
+      font-family: var(--ui);
     }
 
-    main {
-      max-width: 720px;
-      margin: 48px auto;
-      padding: 0 24px;
+    #app {
+      height: 100vh;
+      overflow: hidden;
     }
 
-    h1 {
-      font-size: 28px;
-      margin-bottom: 8px;
+    #viewport {
+      position: fixed;
+      inset: 0;
+      z-index: 0;
     }
 
-    p {
-      font-size: 15px;
-      line-height: 1.5;
-      margin: 0 0 24px 0;
-      color: #222;
+    #toolbar {
+      position: fixed;
+      top: 18px;
+      left: 18px;
+      right: 18px;
+      z-index: 2;
+      display: grid;
+      gap: 12px;
+      padding: 14px 16px;
+      border-radius: 16px;
+      background: var(--panel);
+      border: 1px solid var(--panel-border);
+      box-shadow: 0 12px 30px var(--shadow);
+      animation: floatIn 0.6s ease both;
+      transition: transform 0.25s ease, opacity 0.25s ease;
     }
 
-    ul {
-      list-style: none;
-      padding: 0;
+    .brand {
+      display: flex;
+      align-items: baseline;
+      justify-content: space-between;
+      gap: 12px;
+      font-family: var(--title);
+      letter-spacing: 0.02em;
+    }
+
+    .brand h1 {
       margin: 0;
+      font-size: 20px;
+      font-weight: 700;
     }
 
-    li {
-      margin-bottom: 16px;
+    .brand span {
+      font-size: 12px;
+      text-transform: uppercase;
+      letter-spacing: 0.18em;
+      color: #5b4a3c;
     }
 
-    a {
-      display: block;
-      padding: 12px 16px;
-      border: 1px solid #000;
-      text-decoration: none;
-      color: #000;
-      font-weight: 600;
+    #controls {
+      display: grid;
+      grid-template-columns: repeat(auto-fit, minmax(140px, 1fr));
+      gap: 10px;
+      align-items: end;
     }
 
-    a:hover {
-      background: #000;
+    #controls label {
+      display: grid;
+      gap: 6px;
+      font-size: 11px;
+      text-transform: uppercase;
+      letter-spacing: 0.12em;
+      color: #5b4a3c;
+    }
+
+    #controls input,
+    #controls select,
+    #controls button {
+      font: 14px/1 var(--ui);
+      padding: 8px 10px;
+      border-radius: 10px;
+      border: 1px solid var(--panel-border);
+      background: #fffaf3;
+      color: var(--ink);
+    }
+
+    #controls input[type="checkbox"] {
+      width: 18px;
+      height: 18px;
+      accent-color: var(--accent);
+    }
+
+    #controls .inline {
+      display: flex;
+      gap: 8px;
+      align-items: center;
+    }
+
+    #controls button {
+      background: var(--accent);
       color: #fff;
+      border: none;
+      font-weight: 600;
+      cursor: pointer;
+      transition: transform 0.15s ease, box-shadow 0.2s ease;
     }
 
-    .note {
-      margin-top: 32px;
-      font-size: 13px;
-      color: #444;
+    #controls button:hover {
+      transform: translateY(-1px);
+      box-shadow: 0 8px 18px rgba(15, 107, 91, 0.3);
     }
 
-    code {
-      background: #f2f2f2;
-      padding: 2px 4px;
+    #hud {
+      position: fixed;
+      left: 18px;
+      bottom: 18px;
+      z-index: 2;
+      padding: 12px 14px;
+      border-radius: 12px;
+      background: rgba(14, 12, 10, 0.84);
+      color: #fef5e7;
+      font-size: 12px;
+      line-height: 1.5;
+      letter-spacing: 0.02em;
+      max-width: 280px;
+      animation: fadeIn 0.8s ease both 0.2s;
+    }
+
+    #hud button {
+      margin-top: 8px;
+      padding: 6px 10px;
+      border-radius: 10px;
+      border: 1px solid rgba(251, 211, 164, 0.6);
+      background: transparent;
+      color: #fef5e7;
+      font: 11px/1 var(--ui);
+      text-transform: uppercase;
+      letter-spacing: 0.12em;
+      cursor: pointer;
+    }
+
+    #hud strong {
+      display: block;
+      font-weight: 600;
+      font-size: 12px;
+      letter-spacing: 0.12em;
+      text-transform: uppercase;
+      color: #fbd3a4;
+      margin-bottom: 6px;
+    }
+
+    #toolbarToggle {
+      display: none;
+      align-items: center;
+      justify-content: center;
+      gap: 6px;
+      border-radius: 999px;
+      padding: 6px 10px;
+      border: 1px solid var(--panel-border);
+      background: var(--panel);
+      color: #5b4a3c;
+      font-size: 11px;
+      letter-spacing: 0.12em;
+      text-transform: uppercase;
+      cursor: pointer;
+      z-index: 3;
+    }
+
+    .toolbar-collapsed #toolbar {
+      transform: translateY(-110%);
+      opacity: 0;
+      pointer-events: none;
+    }
+
+    .mobile-only {
+      display: none;
+    }
+
+    .desktop-only {
+      display: inline-flex;
+    }
+
+    #status {
+      display: block;
+      margin-top: 8px;
+      color: #fbd3a4;
+      font-family: var(--mono);
+      font-size: 11px;
+    }
+
+    @keyframes floatIn {
+      from { opacity: 0; transform: translateY(-10px); }
+      to { opacity: 1; transform: translateY(0); }
+    }
+
+    @keyframes fadeIn {
+      from { opacity: 0; transform: translateY(8px); }
+      to { opacity: 1; transform: translateY(0); }
+    }
+
+    @media (max-width: 720px) {
+      #toolbar {
+        left: 12px;
+        right: 12px;
+      }
+
+      .brand {
+        flex-direction: column;
+        align-items: flex-start;
+      }
+
+      #hud {
+        max-width: 240px;
+      }
+
+      #toolbarToggle {
+        position: fixed;
+        top: 12px;
+        left: 12px;
+        display: inline-flex;
+      }
+
+      .mobile-only {
+        display: inline-flex;
+      }
+
+      .desktop-only {
+        display: none;
+      }
     }
   </style>
 </head>
 <body>
-  <main>
-    <h1>Cloth Simulation Demos</h1>
-    <p>
-      Educational cloth simulation using a shared physics core (<code>cloth.js</code>)
-      with three different rendering backends.  
-      The cloth starts horizontal, one edge pinned, gravity enabled, with mouse grab,
-      drag, and wind interaction.
-    </p>
+  <div id="app">
+    <div id="viewport"></div>
 
-    <ul>
-      <li>
-        <a href="./index_threejs.html">
-          three.js Renderer
-        </a>
-      </li>
-      <li>
-        <a href="./index_canvas2d.html">
-          Canvas 2D Renderer
-        </a>
-      </li>
-      <li>
-        <a href="./index_webgl.html">
-          Raw WebGL Renderer
-        </a>
-      </li>
-    </ul>
+    <button id="toolbarToggle" type="button" aria-expanded="true">Hide</button>
+    <header id="toolbar">
+      <div class="brand">
+        <h1>Cloth Simulation Lab</h1>
+        <span>Unified Renderers</span>
+      </div>
+      <form id="controls">
+        <label>
+          Renderer
+          <select id="rendererSelect">
+            <option value="three">three.js</option>
+            <option value="canvas2d">Canvas 2D</option>
+            <option value="webgl">Raw WebGL</option>
+          </select>
+        </label>
+        <label>
+          Grid X
+          <input id="nx" type="number" min="2" max="512" value="16" />
+        </label>
+        <label>
+          Grid Y
+          <input id="ny" type="number" min="2" max="512" value="16" />
+        </label>
+        <label>
+          Size
+          <input id="clothSize" type="number" min="1" max="500" step="1" value="20" />
+        </label>
+        <label>
+          Constraints
+          <input id="constraintIters" type="number" min="1" max="20" value="6" />
+        </label>
+        <label>
+          Gravity (m/s²)
+          <input id="gravityMag" type="number" min="0" max="50" step="0.1" value="9.8" />
+        </label>
+        <label>
+          Wind Vector (JSON)
+          <input id="windVec" type="text" value="[0,0,0]" />
+        </label>
+        <label>
+          Pin Edge
+          <select id="pinEdge">
+            <option value="top">Top</option>
+            <option value="bottom">Bottom</option>
+            <option value="left">Left</option>
+            <option value="right">Right</option>
+          </select>
+        </label>
+        <label>
+          Max Simulation Step (s)
+          <input id="maxSubstep" type="number" min="0.002" max="0.05" step="0.001" value="0.008" />
+        </label>
+        <label>
+          Max Lag (s)
+          <input id="maxAccumulated" type="number" min="0.05" max="1" step="0.05" value="0.25" />
+        </label>
+        <label class="inline">
+          <input id="useShear" type="checkbox" checked />
+          Shear
+        </label>
+        <button id="applyBtn" type="submit">Apply</button>
+        <button id="resetSimBtn" type="button">Reset Simulation</button>
+        <button id="resetDefaultsBtn" type="button">Reset to Defaults</button>
+      </form>
+    </header>
 
-    <div class="note">
-      <strong>Controls:</strong><br/>
-      • Click / drag: grab cloth<br/>
-      • Shift + drag: apply wind<br/>
-      • <code>W</code>: toggle wind
+    <div id="hud">
+      <strong>Controls</strong>
+      Drag: grab cloth / rotate camera<br />
+      Shift + drag: wind (desktop)<br />
+      W: toggle wind
+      <button id="windToggleBtn" class="mobile-only" type="button">Toggle Wind</button>
+      <span id="status"></span>
     </div>
-  </main>
+  </div>
+
+  <script type="module" src="./app.js"></script>
 </body>
 </html>
