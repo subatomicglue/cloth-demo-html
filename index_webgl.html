@@ -1,49 +1,52 @@
 <!doctype html>
 <html lang="en">
 <head>
-  <meta charset="utf-8" />
-  <title>Cloth Demo – Raw WebGL</title>
-  <meta name="viewport" content="width=device-width, initial-scale=1" />
-  <style>
-    html, body {
-      margin: 0;
-      height: 100%;
-      background: #ffffff;
-      overflow: hidden;
-    }
-    canvas {
-      display: block;
-    }
-    #hud {
-      position: fixed;
-      left: 10px;
-      top: 10px;
-      font: 12px system-ui, sans-serif;
-      color: #000;
-      background: rgba(255,255,255,0.85);
-      padding: 6px 8px;
-      border: 1px solid #000;
-    }
-  </style>
+<meta charset="utf-8" />
+<title>Cloth Demo – Raw WebGL (Safari Safe)</title>
+<meta name="viewport" content="width=device-width, initial-scale=1" />
+<style>
+  html, body {
+    margin: 0;
+    height: 100%;
+    background: #ffffff;
+    overflow: hidden;
+  }
+  canvas {
+    display: block;
+  }
+  #hud {
+    position: fixed;
+    left: 10px;
+    top: 10px;
+    font: 12px system-ui, sans-serif;
+    color: #000;
+    background: rgba(255,255,255,0.9);
+    border: 1px solid #000;
+    padding: 6px 8px;
+  }
+</style>
 </head>
 <body>
-  <div id="hud">
-    WebGL (Safari-safe)<br/>
-    Grab: drag<br/>
-    Wind: Shift+drag<br/>
-    Toggle wind: W
-  </div>
-  <canvas id="gl"></canvas>
+
+<div id="hud">
+  WebGL (Safari-safe)<br/>
+  Drag: grab cloth<br/>
+  Shift+drag: wind<br/>
+  W: toggle wind
+</div>
+
+<canvas id="gl"></canvas>
 
 <script type="module">
 import { Cloth } from "./cloth.js";
 
-/* ------------------------------------------------------------------ */
-/* Canvas + GL setup                                                   */
-/* ------------------------------------------------------------------ */
+/* ============================================================
+   WebGL setup
+   ============================================================ */
 
 const canvas = document.getElementById("gl");
-const gl = canvas.getContext("webgl", { alpha: false, antialias: true });
+const gl = canvas.getContext("webgl", { alpha:false, antialias:true });
+
 if (!gl) {
   alert("WebGL not supported");
   throw new Error("WebGL not supported");
@@ -51,21 +54,21 @@ if (!gl) {
 
 function resize() {
   const dpr = devicePixelRatio || 1;
-  canvas.width = Math.floor(innerWidth * dpr);
+  canvas.width  = Math.floor(innerWidth  * dpr);
   canvas.height = Math.floor(innerHeight * dpr);
-  canvas.style.width = innerWidth + "px";
+  canvas.style.width  = innerWidth + "px";
   canvas.style.height = innerHeight + "px";
   gl.viewport(0, 0, canvas.width, canvas.height);
 }
 addEventListener("resize", resize);
 resize();
 
-gl.clearColor(1, 1, 1, 1);
+gl.clearColor(1,1,1,1);
 gl.enable(gl.DEPTH_TEST);
 
-/* ------------------------------------------------------------------ */
-/* Shaders                                                            */
-/* ------------------------------------------------------------------ */
+/* ============================================================
+   Shaders
+   ============================================================ */
 
 const VS = `
 attribute vec3 aPos;
@@ -102,37 +105,33 @@ if (!gl.getProgramParameter(prog, gl.LINK_STATUS)) {
 }
 gl.useProgram(prog);
 
-const aPos = gl.getAttribLocation(prog, "aPos");
-const uMVP = gl.getUniformLocation(prog, "uMVP");
+const aPos   = gl.getAttribLocation(prog, "aPos");
+const uMVP   = gl.getUniformLocation(prog, "uMVP");
 const uColor = gl.getUniformLocation(prog, "uColor");
 
-/* ------------------------------------------------------------------ */
-/* Minimal math                                                        */
-/* ------------------------------------------------------------------ */
+/* ============================================================
+   Minimal math
+   ============================================================ */
 
 function perspective(fovy, aspect, near, far) {
   const f = 1 / Math.tan(fovy / 2);
   const nf = 1 / (near - far);
   return new Float32Array([
-    f / aspect, 0, 0, 0,
+    f/aspect, 0, 0, 0,
     0, f, 0, 0,
-    0, 0, (far + near) * nf, -1,
-    0, 0, (2 * far * near) * nf, 0
+    0, 0, (far+near)*nf, -1,
+    0, 0, (2*far*near)*nf, 0
   ]);
 }
 
-function lookAt(eye, target, up) {
-  let zx = eye[0] - target[0],
-      zy = eye[1] - target[1],
-      zz = eye[2] - target[2];
-  const zl = Math.hypot(zx, zy, zz) || 1;
-  zx /= zl; zy /= zl; zz /= zl;
+function lookAt(e, t, u) {
+  let zx = e[0]-t[0], zy = e[1]-t[1], zz = e[2]-t[2];
+  let zl = Math.hypot(zx,zy,zz) || 1; zx/=zl; zy/=zl; zz/=zl;
 
-  let xx = up[1]*zz - up[2]*zy,
-      xy = up[2]*zx - up[0]*zz,
-      xz = up[0]*zy - up[1]*zx;
-  const xl = Math.hypot(xx, xy, xz) || 1;
-  xx /= xl; xy /= xl; xz /= xl;
+  let xx = u[1]*zz - u[2]*zy,
+      xy = u[2]*zx - u[0]*zz,
+      xz = u[0]*zy - u[1]*zx;
+  let xl = Math.hypot(xx,xy,xz) || 1; xx/=xl; xy/=xl; xz/=xl;
 
   const yx = zy*xz - zz*xy,
         yy = zz*xx - zx*xz,
@@ -142,30 +141,27 @@ function lookAt(eye, target, up) {
     xx, yx, zx, 0,
     xy, yy, zy, 0,
     xz, yz, zz, 0,
-    -(xx*eye[0] + xy*eye[1] + xz*eye[2]),
-    -(yx*eye[0] + yy*eye[1] + yz*eye[2]),
-    -(zx*eye[0] + zy*eye[1] + zz*eye[2]),
+    -(xx*e[0] + xy*e[1] + xz*e[2]),
+    -(yx*e[0] + yy*e[1] + yz*e[2]),
+    -(zx*e[0] + zy*e[1] + zz*e[2]),
     1
   ]);
 }
 
-function mul(a, b) {
+function mul(a,b){
   const o = new Float32Array(16);
-  for (let c = 0; c < 4; c++) {
-    for (let r = 0; r < 4; r++) {
-      o[c*4 + r] =
-        a[0*4 + r] * b[c*4 + 0] +
-        a[1*4 + r] * b[c*4 + 1] +
-        a[2*4 + r] * b[c*4 + 2] +
-        a[3*4 + r] * b[c*4 + 3];
-    }
-  }
+  for (let c=0;c<4;c++) for (let r=0;r<4;r++)
+    o[c*4+r] =
+      a[0*4+r]*b[c*4+0] +
+      a[1*4+r]*b[c*4+1] +
+      a[2*4+r]*b[c*4+2] +
+      a[3*4+r]*b[c*4+3];
   return o;
 }
 
-/* ------------------------------------------------------------------ */
-/* Cloth (Safari-safe size)                                            */
-/* ------------------------------------------------------------------ */
+/* ============================================================
+   Cloth (Safari-safe size)
+   ============================================================ */
 
 const cloth = new Cloth({
   nx: 128,
@@ -179,13 +175,13 @@ const cloth = new Cloth({
 
 const positions = cloth.getPositions();
 
-/* IMPORTANT: Uint16 indices only */
-const triIdx = new Uint16Array(cloth.getTriangleIndices());
+/* IMPORTANT: force Uint16 indices */
+const triIdx  = new Uint16Array(cloth.getTriangleIndices());
 const lineIdx = new Uint16Array(cloth.getLineIndices());
 
-/* ------------------------------------------------------------------ */
-/* Buffers                                                            */
-/* ------------------------------------------------------------------ */
+/* ============================================================
+   Buffers
+   ============================================================ */
 
 const vbo = gl.createBuffer();
 gl.bindBuffer(gl.ARRAY_BUFFER, vbo);
@@ -201,43 +197,38 @@ const iboLine = gl.createBuffer();
 gl.bindBuffer(gl.ELEMENT_ARRAY_BUFFER, iboLine);
 gl.bufferData(gl.ELEMENT_ARRAY_BUFFER, lineIdx, gl.STATIC_DRAW);
 
-/* ------------------------------------------------------------------ */
-/* Pointer → ray                                                       */
-/* ------------------------------------------------------------------ */
+/* ============================================================
+   Camera + pointer → ray
+   ============================================================ */
 
-const camEye = [0, 1.2, 2.2];
+const camEye    = [0, 1.2, 2.2];
 const camTarget = [0, 0.2, 0];
-const camUp = [0, 1, 0];
+const camUp     = [0, 1, 0];
 const fov = 55 * Math.PI / 180;
 
-const pointer = { x: 0, y: 0, down: false, shift: false, lx: 0, ly: 0 };
+const pointer = { x:0, y:0, down:false, shift:false, lx:0, ly:0 };
 
 addEventListener("pointermove", e => {
   pointer.x = e.clientX;
   pointer.y = e.clientY;
   pointer.shift = e.shiftKey;
-
   if (pointer.down && pointer.shift) {
     const dx = e.clientX - pointer.lx;
     const dy = e.clientY - pointer.ly;
-    cloth.setWind([dx * 0.02, 0, dy * 0.02]);
+    cloth.setWind([dx*0.02, 0, dy*0.02]);
   }
   pointer.lx = e.clientX;
   pointer.ly = e.clientY;
 });
-
 addEventListener("pointerdown", e => {
   pointer.down = true;
   pointer.shift = e.shiftKey;
   pointer.lx = e.clientX;
   pointer.ly = e.clientY;
 });
-
 addEventListener("pointerup", () => pointer.down = false);
 addEventListener("keydown", e => {
-  if (e.key.toLowerCase() === "w") {
-    cloth.setWindEnabled(!cloth.windEnabled);
-  }
+  if (e.key.toLowerCase() === "w") cloth.setWindEnabled(!cloth.windEnabled);
 });
 
 function screenRay() {
@@ -249,43 +240,37 @@ function screenRay() {
   let dx = nx * t * aspect;
   let dy = ny * t;
   let dz = -1;
-  const l = Math.hypot(dx, dy, dz) || 1;
-  dx /= l; dy /= l; dz /= l;
+  let l = Math.hypot(dx,dy,dz)||1; dx/=l; dy/=l; dz/=l;
 
-  // forward
-  let fx = camTarget[0] - camEye[0],
-      fy = camTarget[1] - camEye[1],
-      fz = camTarget[2] - camEye[2];
-  const fl = Math.hypot(fx, fy, fz) || 1;
-  fx /= fl; fy /= fl; fz /= fl;
+  let fx = camTarget[0]-camEye[0],
+      fy = camTarget[1]-camEye[1],
+      fz = camTarget[2]-camEye[2];
+  l = Math.hypot(fx,fy,fz)||1; fx/=l; fy/=l; fz/=l;
 
-  // right
-  let rx = fy * camUp[2] - fz * camUp[1],
-      ry = fz * camUp[0] - fx * camUp[2],
-      rz = fx * camUp[1] - fy * camUp[0];
-  const rl = Math.hypot(rx, ry, rz) || 1;
-  rx /= rl; ry /= rl; rz /= rl;
+  let rx = fy*camUp[2]-fz*camUp[1],
+      ry = fz*camUp[0]-fx*camUp[2],
+      rz = fx*camUp[1]-fy*camUp[0];
+  l = Math.hypot(rx,ry,rz)||1; rx/=l; ry/=l; rz/=l;
 
-  // up
-  const ux = ry * fz - rz * fy,
-        uy = rz * fx - rx * fz,
-        uz = rx * fy - ry * fx;
+  const ux = ry*fz - rz*fy,
+        uy = rz*fx - rx*fz,
+        uz = rx*fy - ry*fx;
 
-  const wx = rx * dx + ux * dy + fx * (-dz);
-  const wy = ry * dx + uy * dy + fy * (-dz);
-  const wz = rz * dx + uz * dy + fz * (-dz);
-  const wl = Math.hypot(wx, wy, wz) || 1;
+  const wx = rx*dx + ux*dy + fx*(-dz);
+  const wy = ry*dx + uy*dy + fy*(-dz);
+  const wz = rz*dx + uz*dy + fz*(-dz);
+  l = Math.hypot(wx,wy,wz)||1;
 
-  return { o: camEye, d: [wx/wl, wy/wl, wz/wl] };
+  return { o: camEye, d:[wx/l, wy/l, wz/l] };
 }
 
-/* ------------------------------------------------------------------ */
-/* Loop                                                               */
-/* ------------------------------------------------------------------ */
+/* ============================================================
+   Loop
+   ============================================================ */
 
 let last = performance.now();
-function frame(t) {
-  const dt = Math.min((t - last) / 1000, 1/30);
+function frame(t){
+  const dt = Math.min((t-last)/1000, 1/30);
   last = t;
 
   const ray = screenRay();
@@ -297,16 +282,16 @@ function frame(t) {
 
   gl.clear(gl.COLOR_BUFFER_BIT | gl.DEPTH_BUFFER_BIT);
 
-  const P = perspective(fov, canvas.width / canvas.height, 0.01, 100);
+  const P = perspective(fov, canvas.width/canvas.height, 0.01, 100);
   const V = lookAt(camEye, camTarget, camUp);
   const MVP = mul(P, V);
   gl.uniformMatrix4fv(uMVP, false, MVP);
 
-  gl.uniform4f(uColor, 1, 0, 0, 1);
+  gl.uniform4f(uColor, 1,0,0,1);
   gl.bindBuffer(gl.ELEMENT_ARRAY_BUFFER, iboTri);
   gl.drawElements(gl.TRIANGLES, triIdx.length, gl.UNSIGNED_SHORT, 0);
 
-  gl.uniform4f(uColor, 0, 0, 1, 1);
+  gl.uniform4f(uColor, 0,0,1,1);
   gl.bindBuffer(gl.ELEMENT_ARRAY_BUFFER, iboLine);
   gl.drawElements(gl.LINES, lineIdx.length, gl.UNSIGNED_SHORT, 0);
 
