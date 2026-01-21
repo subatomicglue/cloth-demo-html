@@ -55,7 +55,6 @@
       border: 1px solid var(--panel-border);
       box-shadow: 0 12px 30px var(--shadow);
       animation: floatIn 0.6s ease both;
-      transition: transform 0.25s ease, opacity 0.25s ease;
     }
 
     .brand {
@@ -82,7 +81,7 @@
 
     #controls {
       display: grid;
-      grid-template-columns: repeat(auto-fit, minmax(140px, 1fr));
+      grid-template-columns: repeat(auto-fit, minmax(160px, 1fr));
       gap: 10px;
       align-items: end;
     }
@@ -173,7 +172,7 @@
     }
 
     #toolbarToggle {
-      display: none;
+      display: inline-flex;
       align-items: center;
       justify-content: center;
       gap: 6px;
@@ -187,12 +186,37 @@
       text-transform: uppercase;
       cursor: pointer;
       z-index: 3;
+      position: fixed;
+      top: 12px;
+      left: 12px;
     }
 
     .toolbar-collapsed #toolbar {
-      transform: translateY(-110%);
-      opacity: 0;
-      pointer-events: none;
+      display: none;
+    }
+
+    #hudToggle {
+      display: inline-flex;
+      align-items: center;
+      justify-content: center;
+      gap: 6px;
+      border-radius: 999px;
+      padding: 6px 10px;
+      border: 1px solid var(--panel-border);
+      background: var(--accent);
+      color: #fff;
+      font-size: 11px;
+      letter-spacing: 0.12em;
+      text-transform: uppercase;
+      cursor: pointer;
+      z-index: 4;
+      position: absolute;
+      top: 6px;
+      right: 6px;
+    }
+
+    .hud-hidden #hud {
+      display: none;
     }
 
     .mobile-only {
@@ -234,13 +258,6 @@
 
       #hud {
         max-width: 240px;
-      }
-
-      #toolbarToggle {
-        position: fixed;
-        top: 12px;
-        left: 12px;
-        display: inline-flex;
       }
 
       .mobile-only {
@@ -285,7 +302,7 @@
           <input id="clothSize" type="number" min="1" max="500" step="1" value="20" />
         </label>
         <label>
-          Constraints
+          Constraint Solver Iterations
           <input id="constraintIters" type="number" min="1" max="20" value="6" />
         </label>
         <label>
@@ -294,7 +311,11 @@
         </label>
         <label>
           Wind Vector (JSON)
-          <input id="windVec" type="text" value="[0,0,0]" />
+          <input id="windVec" type="text" value="[-20,0,0]" />
+        </label>
+        <label>
+          Wind Variation (0-1)
+          <input id="windVariation" type="number" min="0" max="1" step="0.1" value="0.5" />
         </label>
         <label>
           Pin Edge
@@ -324,11 +345,12 @@
     </header>
 
     <div id="hud">
+      <button id="hudToggle" type="button" aria-expanded="true">Hide</button>
       <strong>Controls</strong>
       Drag: grab cloth / rotate camera<br />
       Shift + drag: wind (desktop)<br />
-      W: toggle wind
-      <button id="windToggleBtn" class="mobile-only" type="button">Toggle Wind</button>
+      <span id="windToggleText" style="cursor: pointer;">W: toggle</span>
+      <button id="windToggleBtn" type="button">WIND OFF</button>
       <span id="status"></span>
     </div>
   </div>

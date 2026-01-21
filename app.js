@@ -9,6 +9,9 @@ const rendererSelect = document.getElementById("rendererSelect");
 const toolbarToggle = document.getElementById("toolbarToggle");
 const toolbar = document.getElementById("toolbar");
 const windToggleBtn = document.getElementById("windToggleBtn");
+const windToggleText = document.getElementById("windToggleText");
+const hud = document.getElementById("hud");
+const hudToggle = document.getElementById("hudToggle");
 const controlsForm = document.getElementById("controls");
 const nxInput = document.getElementById("nx");
 const nyInput = document.getElementById("ny");
@@ -16,6 +19,7 @@ const clothSizeInput = document.getElementById("clothSize");
 const constraintInput = document.getElementById("constraintIters");
 const gravityInput = document.getElementById("gravityMag");
 const windInput = document.getElementById("windVec");
+const windVariationInput = document.getElementById("windVariation");
 const pinEdgeSelect = document.getElementById("pinEdge");
 const maxSubstepInput = document.getElementById("maxSubstep");
 const maxAccumulatedInput = document.getElementById("maxAccumulated");
@@ -25,6 +29,10 @@ const resetSimBtn = document.getElementById("resetSimBtn");
 const resetDefaultsBtn = document.getElementById("resetDefaultsBtn");
 const status = document.getElementById("status");
 const { notify } = createToastManager();
+
+let currentBaseWind = [-20, 0, 0];
+let currentWindFactor = 1;
+let targetWindFactor = 1;
 
 const camera = {
   eye: [0, 1.2, 2.2],
@@ -58,6 +66,11 @@ const pointer = {
   ly: 0,
   mode: "none",
 };
+
+function isUiEventTarget(target) {
+  if (!(target instanceof Element)) return false;
+  return !!target.closest("#toolbar, #hud, #toolbarToggle, #toast-notification-container");
+}
 
 const orbit = {
   yaw: 0,
@@ -104,6 +117,7 @@ function readParams() {
   const extentZ = spacing * (ny - 1);
   const gravityMag = Math.max(0, readNumber(gravityInput, 9.8));
   const wind = parseVectorInput(windInput.value);
+  const windVariation = readNumber(windVariationInput, 0.5);
 
   return {
     nx,
@@ -117,6 +131,7 @@ function readParams() {
     gravity: [0, -gravityMag, 0],
     gravityMag,
     wind,
+    windVariation,
     maxSubstep: Math.max(0.002, readNumber(maxSubstepInput, 1 / 120)),
     maxAccumulated: Math.max(0.05, readNumber(maxAccumulatedInput, 0.25)),
   };
@@ -168,6 +183,7 @@ function applyParamsWithoutRebuild(nextParams) {
   cloth.gravity[1] = nextParams.gravity[1];
   cloth.gravity[2] = nextParams.gravity[2];
   cloth.setWind(nextParams.wind);
+  currentBaseWind = nextParams.wind.slice();
   currentParams = nextParams;
   updateStatus(nextParams);
   updateWindToggle();
@@ -201,6 +217,8 @@ async function buildRenderer(rebuildCloth = true) {
 
     cloth = new Cloth(params);
     cloth.setWind(params.wind);
+    updateWindText();
+    currentBaseWind = params.wind.slice();
     currentParams = params;
   }
 
@@ -292,6 +310,7 @@ function screenRay(px, py, width, height) {
 }
 
 function onPointerMove(e) {
+  if (isUiEventTarget(e.target)) return;
   pointer.x = e.clientX;
   pointer.y = e.clientY;
   pointer.shift = e.shiftKey;
@@ -301,7 +320,8 @@ function onPointerMove(e) {
   if (pointer.down && pointer.mode === "wind" && cloth) {
     const dx = e.clientX - pointer.lx;
     const dy = e.clientY - pointer.ly;
-    cloth.setWind([dx * 0.02, 0, dy * 0.02]);
+    currentBaseWind = [dx * 0.1, 0, dy * 0.1];
+    cloth.setWind(currentBaseWind);
   }
   if (pointer.down && pointer.mode === "orbit") {
     const dx = e.clientX - pointer.lx;
@@ -316,6 +336,7 @@ function onPointerMove(e) {
 }
 
 function onPointerDown(e) {
+  if (isUiEventTarget(e.target)) return;
   pointer.down = true;
   pointer.shift = e.shiftKey;
   pointer.lx = e.clientX;
@@ -347,6 +368,7 @@ function onPointerUp() {
 }
 
 function onWheel(e) {
+  if (isUiEventTarget(e.target)) return;
   e.preventDefault();
   const zoomSpeed = 0.0015;
   const scale = Math.exp(e.deltaY * zoomSpeed);
@@ -357,6 +379,7 @@ function onWheel(e) {
 let pinchLastDist = null;
 
 function onTouchMove(e) {
+  if (isUiEventTarget(e.target)) return;
   if (e.touches.length !== 2) return;
   const dx = e.touches[0].clientX - e.touches[1].clientX;
   const dy = e.touches[0].clientY - e.touches[1].clientY;
@@ -380,6 +403,8 @@ function onKeyDown(e) {
   if (!cloth) return;
   if (e.key.toLowerCase() === "w") {
     cloth.setWindEnabled(!cloth.windEnabled);
+    windToggleBtn.textContent = cloth.windEnabled ? "WIND ON" : "WIND OFF";
+    updateWindText();
   }
 }
 
@@ -396,6 +421,25 @@ function frame(t) {
     if (size) {
       const ray = screenRay(pointer.x, pointer.y, size.width, size.height);
       if (ray) cloth.setPointerRay(ray.o, ray.d, pointer.down && pointer.mode === "grab");
+    }
+
+    // Apply wind variation
+    if (currentParams && currentParams.windVariation > 0) {
+      // Randomly update target with small probability per frame
+      if (Math.random() < 0.02) {
+        const variation = currentParams.windVariation;
+        targetWindFactor = (1 - variation) + variation * Math.random();
+      }
+      // Smoothly interpolate to target
+      currentWindFactor += (targetWindFactor - currentWindFactor) * 0.02;
+      cloth.wind[0] = currentBaseWind[0] * currentWindFactor;
+      cloth.wind[1] = currentBaseWind[1] * currentWindFactor;
+      cloth.wind[2] = currentBaseWind[2] * currentWindFactor;
+    } else {
+      // No variation, set to base
+      cloth.wind[0] = currentBaseWind[0];
+      cloth.wind[1] = currentBaseWind[1];
+      cloth.wind[2] = currentBaseWind[2];
     }
 
     cloth.step(dt);
@@ -415,6 +459,15 @@ if (controlsForm) {
 applyBtn.addEventListener("click", applyChanges);
 resetSimBtn.addEventListener("click", resetSimulation);
 resetDefaultsBtn.addEventListener("click", resetDefaults);
+
+// Auto-apply for form controls
+pinEdgeSelect.addEventListener("change", applyChanges);
+useShearInput.addEventListener("change", applyChanges);
+const autoApplyInputs = [nxInput, nyInput, clothSizeInput, constraintInput, gravityInput, windInput, windVariationInput, maxSubstepInput, maxAccumulatedInput];
+autoApplyInputs.forEach(input => input.addEventListener("blur", applyChanges));
+
+// Hide apply button since changes auto-apply
+applyBtn.style.display = "none";
 window.addEventListener("pointermove", onPointerMove);
 window.addEventListener("pointerdown", onPointerDown);
 window.addEventListener("pointerup", onPointerUp);
@@ -424,6 +477,21 @@ window.addEventListener("touchend", onTouchEnd);
 window.addEventListener("keydown", onKeyDown);
 window.addEventListener("resize", onResize);
 
+function stopUiPointer(event) {
+  event.stopPropagation();
+}
+
+function stopUiWheel(event) {
+  event.preventDefault();
+  event.stopPropagation();
+}
+
+[toolbar, controlsForm, toolbarToggle, hud, hudToggle].forEach((el) => {
+  if (!el) return;
+  el.addEventListener("pointerdown", stopUiPointer);
+  el.addEventListener("wheel", stopUiWheel, { passive: false });
+});
+
 if (toolbarToggle) {
   toolbarToggle.addEventListener("click", () => {
     const collapsed = document.body.classList.toggle("toolbar-collapsed");
@@ -432,11 +500,53 @@ if (toolbarToggle) {
   });
 }
 
+if (hudToggle) {
+  hudToggle.addEventListener("click", () => {
+    const hidden = document.body.classList.toggle("hud-hidden");
+    hudToggle.setAttribute("aria-expanded", hidden ? "false" : "true");
+    if (hidden) {
+      hud.style.display = 'none';
+      document.body.appendChild(hudToggle);
+      hudToggle.style.position = 'fixed';
+      hudToggle.style.bottom = '12px';
+      hudToggle.style.left = '12px';
+      hudToggle.style.right = 'auto';
+      hudToggle.style.top = 'auto';
+      hudToggle.textContent = 'Info';
+    } else {
+      hud.style.display = '';
+      hud.appendChild(hudToggle);
+      hudToggle.style.position = 'absolute';
+      hudToggle.style.top = '6px';
+      hudToggle.style.right = '6px';
+      hudToggle.style.bottom = 'auto';
+      hudToggle.style.left = 'auto';
+      hudToggle.textContent = 'Hide';
+    }
+  });
+}
+
+function updateWindText() {
+  if (windToggleText) {
+    windToggleText.textContent = "W: toggle";
+  }
+}
+
 if (windToggleBtn) {
   windToggleBtn.addEventListener("click", () => {
     if (!cloth) return;
     cloth.setWindEnabled(!cloth.windEnabled);
-    windToggleBtn.textContent = cloth.windEnabled ? "Wind On" : "Wind Off";
+    windToggleBtn.textContent = cloth.windEnabled ? "WIND ON" : "WIND OFF";
+    updateWindText();
+  });
+}
+
+if (windToggleText) {
+  windToggleText.addEventListener("click", () => {
+    if (!cloth) return;
+    cloth.setWindEnabled(!cloth.windEnabled);
+    windToggleBtn.textContent = cloth.windEnabled ? "WIND ON" : "WIND OFF";
+    updateWindText();
   });
 }
 

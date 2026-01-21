@@ -106,5 +106,6 @@ export function createToastManager() {
     window.setTimeout(remove, timeout);
   }
 
+  // return the public API here
   return { notify };
 }
