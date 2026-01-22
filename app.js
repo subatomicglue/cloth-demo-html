@@ -69,7 +69,13 @@ const pointer = {
 
 function isUiEventTarget(target) {
   if (!(target instanceof Element)) return false;
-  return !!target.closest("#toolbar, #hud, #toolbarToggle, #toast-notification-container");
+  return !!target.closest("#toolbar, #hud, #toolbarToggle, #hudToggle, #toast-notification-container");
+}
+
+function preventTouchPointerDefault(event) {
+  if (event.pointerType === "touch" && !isUiEventTarget(event.target)) {
+    event.preventDefault();
+  }
 }
 
 const orbit = {
@@ -310,6 +316,7 @@ function screenRay(px, py, width, height) {
 }
 
 function onPointerMove(e) {
+  preventTouchPointerDefault(e);
   if (isUiEventTarget(e.target)) return;
   pointer.x = e.clientX;
   pointer.y = e.clientY;
@@ -336,7 +343,10 @@ function onPointerMove(e) {
 }
 
 function onPointerDown(e) {
+  preventTouchPointerDefault(e);
   if (isUiEventTarget(e.target)) return;
+  pointer.x = e.clientX;
+  pointer.y = e.clientY;
   pointer.down = true;
   pointer.shift = e.shiftKey;
   pointer.lx = e.clientX;
@@ -361,35 +371,58 @@ function onPointerDown(e) {
   pointer.mode = "orbit";
 }
 
-function onPointerUp() {
+function onPointerUp(e) {
+  preventTouchPointerDefault(e);
   pointer.down = false;
   pointer.mode = "none";
   if (cloth) cloth.setPointerRay([0, 0, 0], [0, 0, -1], false);
 }
 
-function onWheel(e) {
-  if (isUiEventTarget(e.target)) return;
-  e.preventDefault();
-  const zoomSpeed = 0.0015;
-  const scale = Math.exp(e.deltaY * zoomSpeed);
+const ZOOM_WHEEL_SPEED = 0.0015;
+const ZOOM_PINCH_SPEED = 0.009; // pinch feels slower, so boost response
+
+function applyZoomDelta(delta) {
+  if (!Number.isFinite(delta) || delta === 0) return;
+  const scale = Math.exp(delta);
   orbit.radius = Math.min(200, Math.max(0.5, orbit.radius * scale));
   applyOrbitCamera();
 }
 
+function onWheel(e) {
+  if (isUiEventTarget(e.target)) return;
+  e.preventDefault();
+  applyZoomDelta(e.deltaY * ZOOM_WHEEL_SPEED);
+}
+
 let pinchLastDist = null;
+
+function onTouchStart(e) {
+  if (isUiEventTarget(e.target)) return;
+  if (e.touches.length === 2) {
+    const dx = e.touches[0].clientX - e.touches[1].clientX;
+    const dy = e.touches[0].clientY - e.touches[1].clientY;
+    pinchLastDist = Math.hypot(dx, dy);
+  } else {
+    pinchLastDist = null;
+  }
+  if (e.touches.length >= 1) {
+    e.preventDefault();
+  }
+}
 
 function onTouchMove(e) {
   if (isUiEventTarget(e.target)) return;
+  if (e.touches.length === 1) {
+    e.preventDefault();
+    return;
+  }
   if (e.touches.length !== 2) return;
   const dx = e.touches[0].clientX - e.touches[1].clientX;
   const dy = e.touches[0].clientY - e.touches[1].clientY;
   const dist = Math.hypot(dx, dy);
   if (pinchLastDist != null) {
     const delta = pinchLastDist - dist;
-    const zoomSpeed = 0.003;
-    const scale = Math.exp(delta * zoomSpeed);
-    orbit.radius = Math.min(200, Math.max(0.5, orbit.radius * scale));
-    applyOrbitCamera();
+    applyZoomDelta(delta * ZOOM_PINCH_SPEED);
   }
   pinchLastDist = dist;
   e.preventDefault();
@@ -468,12 +501,14 @@ autoApplyInputs.forEach(input => input.addEventListener("blur", applyChanges));
 
 // Hide apply button since changes auto-apply
 applyBtn.style.display = "none";
-window.addEventListener("pointermove", onPointerMove);
-window.addEventListener("pointerdown", onPointerDown);
-window.addEventListener("pointerup", onPointerUp);
+window.addEventListener("pointermove", onPointerMove, { passive: false });
+window.addEventListener("pointerdown", onPointerDown, { passive: false });
+window.addEventListener("pointerup", onPointerUp, { passive: false });
 window.addEventListener("wheel", onWheel, { passive: false });
+window.addEventListener("touchstart", onTouchStart, { passive: false });
 window.addEventListener("touchmove", onTouchMove, { passive: false });
 window.addEventListener("touchend", onTouchEnd);
+window.addEventListener("touchcancel", onTouchEnd);
 window.addEventListener("keydown", onKeyDown);
 window.addEventListener("resize", onResize);
 

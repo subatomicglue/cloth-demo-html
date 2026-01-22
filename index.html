@@ -28,6 +28,7 @@
       background: radial-gradient(circle at 20% 10%, #fff6e5, #f7f2ea 45%, #efe6d7 100%);
       color: var(--ink);
       font-family: var(--ui);
+      overscroll-behavior: none;
     }
 
     #app {
@@ -39,6 +40,11 @@
       position: fixed;
       inset: 0;
       z-index: 0;
+      touch-action: none;
+    }
+
+    #viewport > * {
+      touch-action: none;
     }
 
     #toolbar {
