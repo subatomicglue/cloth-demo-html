@@ -4,6 +4,25 @@ import { createRenderer as createWebGL } from "./renderer_webgl.js";
 import { createRenderer as createThree } from "./renderer_threejs.js";
 import { createToastManager } from "./toast_notification.js";
 
+const pendingGlobalErrors = [];
+let showGlobalError = (message) => {
+  pendingGlobalErrors.push(message);
+  // eslint-disable-next-line no-console
+  console.error(message);
+};
+
+function formatErrorMessage(prefix, value) {
+  if (!value) return prefix;
+  if (typeof value === "string") return `${prefix}: ${value}`;
+  if (value && value.message) return `${prefix}: ${value.message}`;
+  try {
+    return `${prefix}: ${JSON.stringify(value)}`;
+  } catch {
+    return `${prefix}: ${String(value)}`;
+  }
+}
+
+
 const container = document.getElementById("viewport");
 const rendererSelect = document.getElementById("rendererSelect");
 const toolbarToggle = document.getElementById("toolbarToggle");
@@ -44,6 +63,13 @@ const notify = (message, options = {}) => {
   const color = options.color == null ? fallbackColor : options.color;
   toastManager.notify(message, { ...options, type, color });
 };
+showGlobalError = (message) => {
+  notify(message, { type: "danger" });
+};
+while (pendingGlobalErrors.length) {
+  const buffered = pendingGlobalErrors.shift();
+  showGlobalError(buffered);
+}
 
 const rendererFactories = {
   three: createThree,
@@ -811,15 +837,6 @@ window.addEventListener("touchend", onTouchEnd);
 window.addEventListener("touchcancel", onTouchEnd);
 window.addEventListener("keydown", onKeyDown);
 window.addEventListener("resize", onResize);
-window.addEventListener("error", (event) => {
-  const msg = event && event.message ? event.message : "Unknown script error";
-  notify(`Error: ${msg}`, { type: "danger" });
-});
-window.addEventListener("unhandledrejection", (event) => {
-  const reason = event && event.reason ? event.reason : "Unhandled promise rejection";
-  const msg = typeof reason === "string" ? reason : (reason && reason.message) ? reason.message : String(reason);
-  notify(`Promise error: ${msg}`, { type: "danger" });
-});
 
 function stopUiPointer(event) {
   event.stopPropagation();
