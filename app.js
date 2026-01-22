@@ -28,7 +28,55 @@ const applyBtn = document.getElementById("applyBtn");
 const resetSimBtn = document.getElementById("resetSimBtn");
 const resetDefaultsBtn = document.getElementById("resetDefaultsBtn");
 const status = document.getElementById("status");
-const { notify } = createToastManager();
+const toastManager = createToastManager();
+const TOAST_COLORS = {
+  info: "#7dd3fc",
+  success: "#34d399",
+  warning: "#fbbf24",
+  danger: "#f87171",
+};
+const notify = (message, options = {}) => {
+  const type = options.type ?? "info";
+  const fallbackColor = TOAST_COLORS[type] || TOAST_COLORS.info;
+  const color = options.color ?? fallbackColor;
+  toastManager.notify(message, { ...options, type, color });
+};
+
+const trackedControls = [
+  nxInput, nyInput, clothSizeInput, constraintInput,
+  gravityInput, windInput, windVariationInput,
+  maxSubstepInput, maxAccumulatedInput,
+  pinEdgeSelect, useShearInput,
+];
+
+const controlSnapshots = new Map();
+
+function readControlValue(el) {
+  if (!el) return null;
+  if (el.type === "checkbox") return el.checked ? "1" : "0";
+  return el.value;
+}
+
+function snapshotControl(el) {
+  if (!el) return;
+  controlSnapshots.set(el, readControlValue(el));
+}
+
+function snapshotAllControls() {
+  trackedControls.forEach(snapshotControl);
+}
+
+function bindAutoApply(el, eventName) {
+  if (!el) return;
+  el.addEventListener(eventName, () => {
+    const current = readControlValue(el);
+    const prev = controlSnapshots.get(el);
+    if (prev === current) return;
+    applyChanges();
+  });
+}
+
+snapshotAllControls();
 
 let currentBaseWind = [-20, 0, 0];
 let currentWindFactor = 1;
@@ -161,7 +209,7 @@ function disposeRenderer() {
 
 function resetSimulation() {
   buildRenderer(true);
-  notify("Cloth reset.", { type: "info" });
+  notify("Cloth reset.", { type: "success" });
 }
 
 function resetDefaults() {
@@ -193,7 +241,6 @@ function applyParamsWithoutRebuild(nextParams) {
   currentParams = nextParams;
   updateStatus(nextParams);
   updateWindToggle();
-  notify("Settings applied.", { type: "info" });
 }
 
 function applyChanges() {
@@ -203,6 +250,8 @@ function applyChanges() {
   } else {
     applyParamsWithoutRebuild(params);
   }
+  snapshotAllControls();
+  notify("Settings applied.", { type: "success" });
 }
 
 async function buildRenderer(rebuildCloth = true) {
@@ -238,7 +287,7 @@ async function buildRenderer(rebuildCloth = true) {
   try {
     nextRenderer = await factory({ container, cloth, camera, notify });
   } catch (err) {
-    notify(`Renderer failed: ${err?.message ?? err}`, { type: "warning" });
+    notify(`Renderer failed: ${err?.message ?? err}`, { type: "danger" });
     return;
   }
   if (token !== buildToken) {
@@ -488,16 +537,18 @@ if (controlsForm) {
     event.preventDefault();
     applyChanges();
   });
+  controlsForm.addEventListener("reset", () => {
+    window.requestAnimationFrame(snapshotAllControls);
+  });
 }
-applyBtn.addEventListener("click", applyChanges);
 resetSimBtn.addEventListener("click", resetSimulation);
 resetDefaultsBtn.addEventListener("click", resetDefaults);
 
 // Auto-apply for form controls
-pinEdgeSelect.addEventListener("change", applyChanges);
-useShearInput.addEventListener("change", applyChanges);
+bindAutoApply(pinEdgeSelect, "change");
+bindAutoApply(useShearInput, "change");
 const autoApplyInputs = [nxInput, nyInput, clothSizeInput, constraintInput, gravityInput, windInput, windVariationInput, maxSubstepInput, maxAccumulatedInput];
-autoApplyInputs.forEach(input => input.addEventListener("blur", applyChanges));
+autoApplyInputs.forEach(input => bindAutoApply(input, "blur"));
 
 // Hide apply button since changes auto-apply
 applyBtn.style.display = "none";
