@@ -4,6 +4,16 @@
   <meta charset="utf-8" />
   <title>Cloth Simulation</title>
   <meta name="viewport" content="width=device-width, initial-scale=1" />
+  <meta name="description" content="Interactive cloth simulation playground with multiple renderers, physics controls, and touch support." />
+  <meta property="og:type" content="website" />
+  <meta property="og:title" content="Cloth Simulation" />
+  <meta property="og:description" content="Interactive cloth simulation playground with multiple renderers, physics controls, and touch support." />
+  <meta property="og:image" content="hero.png" />
+  <meta property="og:url" content="https://example.com/" />
+  <meta name="twitter:card" content="summary_large_image" />
+  <meta name="twitter:title" content="Cloth Simulation" />
+  <meta name="twitter:description" content="Interactive cloth simulation playground with multiple renderers, physics controls, and touch support." />
+  <meta name="twitter:image" content="hero.png" />
   <style>
     :root {
       --ink: #0e0c0a;
@@ -138,23 +148,9 @@
       box-shadow: 0 8px 18px rgba(15, 107, 91, 0.3);
     }
 
-    #controlsFooter {
-      grid-column: 1 / -1;
-      display: flex;
-      justify-content: flex-end;
-      align-items: center;
-      font-size: 12px;
-      letter-spacing: 0.12em;
-      color: #5b4a3c;
-      text-transform: uppercase;
-    }
-
     #fpsMeter {
-      font-family: var(--mono);
-      padding: 6px 12px;
-      border-radius: 999px;
-      background: rgba(14, 12, 10, 0.08);
-      border: 1px solid rgba(14, 12, 10, 0.12);
+      margin-left: 10px;
+      font-weight: 600;
     }
 
     #hud {
@@ -173,6 +169,10 @@
       animation: fadeIn 0.8s ease both 0.2s;
     }
 
+    #hudContent {
+      margin-top: 12px;
+    }
+
     #hud button {
       margin-top: 8px;
       padding: 6px 10px;
@@ -184,6 +184,32 @@
       text-transform: uppercase;
       letter-spacing: 0.12em;
       cursor: pointer;
+    }
+
+    #hudToggle {
+      display: inline-flex;
+      align-items: center;
+      gap: 6px;
+      border-radius: 999px;
+      padding: 6px 10px;
+      border: 1px solid rgba(251, 211, 164, 0.6);
+      background: rgba(14, 12, 10, 0.6);
+      color: #fef5e7;
+      font: 11px/1 var(--ui);
+      text-transform: uppercase;
+      letter-spacing: 0.12em;
+      cursor: pointer;
+      position: absolute;
+      top: 6px;
+      right: 6px;
+      z-index: 4;
+    }
+
+    #hudToggleStatus {
+      display: none;
+      font-family: var(--mono);
+      font-size: 11px;
+      color: #fbd3a4;
     }
 
     #hud strong {
@@ -240,8 +266,52 @@
       right: 6px;
     }
 
-    .hud-hidden #hud {
+    #status {
+      display: block;
+      margin-top: 8px;
+      color: #fbd3a4;
+      font-family: var(--mono);
+      font-size: 11px;
+      font-weight: 600;
+    }
+
+    #status {
+      display: block;
+      margin-top: 8px;
+      color: #fbd3a4;
+      font-family: var(--mono);
+      font-size: 11px;
+      font-weight: 600;
+    }
+
+    .hud-hidden #hudContent {
       display: none;
+    }
+
+    .hud-hidden #hud {
+      background: transparent;
+      padding: 0;
+      max-width: none;
+    }
+
+    .hud-hidden #hudToggle {
+      position: static;
+      border: none;
+      background: transparent;
+      padding: 0;
+      gap: 4px;
+      letter-spacing: 0;
+      text-transform: none;
+      color: #fbd3a4;
+      font-family: var(--mono);
+    }
+
+    .hud-hidden #hudToggleLabel {
+      display: none;
+    }
+
+    .hud-hidden #hudToggleStatus {
+      display: inline;
     }
 
     .mobile-only {
@@ -252,13 +322,6 @@
       display: inline-flex;
     }
 
-    #status {
-      display: block;
-      margin-top: 8px;
-      color: #fbd3a4;
-      font-family: var(--mono);
-      font-size: 11px;
-    }
 
     @keyframes floatIn {
       from { opacity: 0; transform: translateY(-10px); }
@@ -308,11 +371,7 @@
       <form id="controls">
         <label>
           Renderer
-          <select id="rendererSelect">
-            <option value="three">three.js</option>
-            <option value="canvas2d">Canvas 2D</option>
-            <option value="webgl">Raw WebGL</option>
-          </select>
+          <select id="rendererSelect"></select>
         </label>
         <label>
           Grid X
@@ -366,20 +425,23 @@
         <button id="applyBtn" type="submit">Apply</button>
         <button id="resetSimBtn" type="button">Reset Simulation</button>
         <button id="resetDefaultsBtn" type="button">Reset to Defaults</button>
-        <div id="controlsFooter">
-          <span id="fpsMeter">-- FPS</span>
-        </div>
       </form>
     </header>
 
     <div id="hud">
-      <button id="hudToggle" type="button" aria-expanded="true">Hide</button>
-      <strong>Controls</strong>
-      Drag: grab cloth / rotate camera<br />
-      Shift + drag: wind (desktop)<br />
-      <span id="windToggleText" style="cursor: pointer;">W: toggle</span>
-      <button id="windToggleBtn" type="button">WIND OFF</button>
-      <span id="status"></span>
+      <button id="hudToggle" type="button" aria-expanded="true">
+        <span id="hudToggleIcon">−</span>
+        <span id="hudToggleLabel">Hide</span>
+        <span id="hudToggleStatus"></span>
+      </button>
+      <div id="hudContent">
+        <strong>Controls</strong>
+        Drag: grab cloth / rotate camera<br />
+        Shift + drag: wind (desktop)<br />
+        <span id="windToggleText" style="cursor: pointer;">W: toggle</span>
+        <button id="windToggleBtn" type="button">WIND OFF</button>
+        <span id="status"></span>
+      </div>
     </div>
   </div>
 

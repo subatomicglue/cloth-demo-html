@@ -1,6 +1,8 @@
 import * as THREE from "https://unpkg.com/three@0.160.0/build/three.module.js";
 import { createAxesOverlay } from "./axes_overlay.js";
 
+const RENDERER_NAME = "three.js";
+
 // create a three.js renderer instance.
 export function createRenderer({ container, cloth, camera, notify }) {
   const canvas = document.createElement("canvas");
@@ -112,5 +114,11 @@ export function createRenderer({ container, cloth, camera, notify }) {
   resize();
 
   // return the Public API for the renderer
-  return { render, resize, getSize, dispose };
+  function getName() {
+    return RENDERER_NAME;
+  }
+
+  return { render, resize, getSize, dispose, getName };
 }
+
+createRenderer.getName = () => RENDERER_NAME;

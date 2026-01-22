@@ -324,7 +324,7 @@ export class Cloth {
 
     let bestIdx = -1;
     let bestDist = threshold;
-    let bestT = 0;
+    let bestT = Infinity;
 
     for (let i = 0, v = 0; i < pos.length; i += 3, v++) {
       if (invMass[v] === 0) continue;
@@ -339,7 +339,9 @@ export class Cloth {
       const qy = origin[1] + dy * t;
       const qz = origin[2] + dz * t;
       const dist = Math.hypot(pos[i + 0] - qx, pos[i + 1] - qy, pos[i + 2] - qz);
-      if (dist < bestDist) {
+      if (dist > threshold) continue;
+
+      if (t < bestT || (t <= bestT && dist < bestDist)) {
         bestDist = dist;
         bestIdx = v;
         bestT = t;

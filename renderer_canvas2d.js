@@ -1,5 +1,7 @@
 import { createAxesOverlay } from "./axes_overlay.js";
 
+const RENDERER_NAME = "Canvas 2D";
+
 // create a Canvas2D renderer instance.
 export function createRenderer({ container, cloth, camera, notify }) {
   const canvas = document.createElement("canvas");
@@ -139,5 +141,11 @@ export function createRenderer({ container, cloth, camera, notify }) {
   resize();
 
   // return the Public API for the renderer
-  return { render, resize, getSize, dispose };
+  function getName() {
+    return RENDERER_NAME;
+  }
+
+  return { render, resize, getSize, dispose, getName };
 }
+
+createRenderer.getName = () => RENDERER_NAME;

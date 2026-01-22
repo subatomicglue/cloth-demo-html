@@ -12,6 +12,9 @@ const windToggleBtn = document.getElementById("windToggleBtn");
 const windToggleText = document.getElementById("windToggleText");
 const hud = document.getElementById("hud");
 const hudToggle = document.getElementById("hudToggle");
+const hudToggleIcon = document.getElementById("hudToggleIcon");
+const hudToggleLabel = document.getElementById("hudToggleLabel");
+const hudToggleStatus = document.getElementById("hudToggleStatus");
 const controlsForm = document.getElementById("controls");
 const nxInput = document.getElementById("nx");
 const nyInput = document.getElementById("ny");
@@ -28,7 +31,6 @@ const applyBtn = document.getElementById("applyBtn");
 const resetSimBtn = document.getElementById("resetSimBtn");
 const resetDefaultsBtn = document.getElementById("resetDefaultsBtn");
 const status = document.getElementById("status");
-const fpsMeter = document.getElementById("fpsMeter");
 const toastManager = createToastManager();
 const TOAST_COLORS = {
   info: "#7dd3fc",
@@ -43,6 +45,37 @@ const notify = (message, options = {}) => {
   toastManager.notify(message, { ...options, type, color });
 };
 
+const rendererFactories = {
+  three: createThree,
+  canvas2d: createCanvas2D,
+  webgl: createWebGL,
+};
+
+let cloth = null;
+let renderer = null;
+let activeRendererType = "three";
+let lastTime = performance.now();
+let buildToken = 0;
+let currentParams = null;
+let fpsSmooth = 0;
+let desiredWindEnabled = true;
+
+const CONTROL_BINDINGS = [
+  { key: "renderer", element: rendererSelect },
+  { key: "nx", element: nxInput },
+  { key: "ny", element: nyInput },
+  { key: "clothSize", element: clothSizeInput },
+  { key: "constraintIters", element: constraintInput },
+  { key: "gravityMag", element: gravityInput },
+  { key: "windVec", element: windInput },
+  { key: "windVariation", element: windVariationInput },
+  { key: "pinEdge", element: pinEdgeSelect },
+  { key: "maxSubstep", element: maxSubstepInput },
+  { key: "maxAccumulated", element: maxAccumulatedInput },
+  { key: "useShear", element: useShearInput, type: "checkbox" },
+  { key: "windEnabled", type: "flag" },
+];
+
 const trackedControls = [
   nxInput, nyInput, clothSizeInput, constraintInput,
   gravityInput, windInput, windVariationInput,
@@ -51,11 +84,30 @@ const trackedControls = [
 ];
 
 const controlSnapshots = new Map();
+const STORAGE_KEY = "cloth-demo-controls";
+
+function parseFlag(value, fallback = false) {
+  if (value == null) return fallback;
+  if (typeof value === "boolean") return value;
+  if (typeof value === "number") return value !== 0;
+  const text = String(value).toLowerCase();
+  return text === "1" || text === "true" || text === "yes";
+}
 
 function readControlValue(el) {
   if (!el) return null;
   if (el.type === "checkbox") return el.checked ? "1" : "0";
   return el.value;
+}
+
+function setControlValue(el, value) {
+  if (!el || value == null) return;
+  if (el.type === "checkbox") {
+    const truthy = value === true || value === "true" || value === "1";
+    el.checked = truthy;
+  } else {
+    el.value = value;
+  }
 }
 
 function snapshotControl(el) {
@@ -77,6 +129,125 @@ function bindAutoApply(el, eventName) {
   });
 }
 
+function serializeControls() {
+  const out = {};
+  CONTROL_BINDINGS.forEach(({ key, element, type }) => {
+    let value = null;
+    if (type === "flag" && key === "windEnabled") {
+      const enabled = cloth ? cloth.windEnabled : desiredWindEnabled;
+      value = enabled ? "1" : "0";
+    } else if (element) {
+      value = readControlValue(element);
+    }
+    if (value != null) out[key] = value;
+  });
+  out.toolbarCollapsed = document.body.classList.contains("toolbar-collapsed") ? "1" : "0";
+  out.hudHidden = document.body.classList.contains("hud-hidden") ? "1" : "0";
+  return out;
+}
+
+function updateUrlParams(record) {
+  const url = new URL(window.location.href);
+  Object.entries(record).forEach(([key, value]) => {
+    if (value == null || value === "") {
+      url.searchParams.delete(key);
+    } else {
+      url.searchParams.set(key, value);
+    }
+  });
+  window.history.replaceState(null, "", url);
+}
+
+function saveToStorage(record) {
+  try {
+    localStorage.setItem(STORAGE_KEY, JSON.stringify(record));
+  } catch {
+    // ignore storage failures
+  }
+}
+
+function loadFromStorage() {
+  try {
+    const text = localStorage.getItem(STORAGE_KEY);
+    return text ? JSON.parse(text) : {};
+  } catch {
+    return {};
+  }
+}
+
+function persistControlState() {
+  const record = serializeControls();
+  updateUrlParams(record);
+  saveToStorage(record);
+}
+
+// ALWAYS prefers URL params over stored values
+function loadPersistedControls() {
+  const url = new URL(window.location.href);
+  const params = url.searchParams;
+  const stored = loadFromStorage();
+  let usedStored = false;
+
+  // restore individual settings controls.
+  CONTROL_BINDINGS.forEach(({ key, element, type }) => {
+    // restore the wind enabled flag.
+    if (type === "flag" && key === "windEnabled") {
+      let value = params.get(key);
+      if (value == null && stored && Object.prototype.hasOwnProperty.call(stored, key)) {
+        value = stored[key];
+        usedStored = true;
+      }
+      if (value != null) {
+        setWindEnabledState(parseFlag(value, true));
+      }
+      return;
+    }
+
+    // generic restore for all settings
+    if (!element) return;
+    let value = params.get(key);
+    if (value == null && stored && Object.prototype.hasOwnProperty.call(stored, key)) {
+      value = stored[key];
+      usedStored = true;
+    }
+    if (value != null) setControlValue(element, value);
+  });
+
+  // restore the "Controls" widget toolbar.
+  const toolbarParam = params.get("toolbarCollapsed");
+  if (toolbarParam != null) {
+    setToolbarCollapsed(parseFlag(toolbarParam));
+  } else if (stored && Object.prototype.hasOwnProperty.call(stored, "toolbarCollapsed")) {
+    setToolbarCollapsed(parseFlag(stored.toolbarCollapsed));
+    usedStored = true;
+  } else {
+    setToolbarCollapsed(document.body.classList.contains("toolbar-collapsed"));
+  }
+
+  // restore the HUD for "Cloth Simulation Lab" settings.
+  const hudParam = params.get("hudHidden");
+  if (hudParam != null) {
+    setHudHidden(parseFlag(hudParam));
+  } else if (stored && Object.prototype.hasOwnProperty.call(stored, "hudHidden")) {
+    setHudHidden(parseFlag(stored.hudHidden));
+    usedStored = true;
+  } else {
+    setHudHidden(document.body.classList.contains("hud-hidden"));
+  }
+
+  if (usedStored) {
+    const record = serializeControls();
+    updateUrlParams(record);
+  }
+  persistControlState();
+}
+
+populateRendererSelect();
+loadPersistedControls();
+if (rendererSelect && rendererSelect.value) {
+  activeRendererType = rendererSelect.value;
+}
+setWindEnabledState(desiredWindEnabled);
 snapshotAllControls();
 
 let currentBaseWind = [-20, 0, 0];
@@ -93,19 +264,45 @@ const camera = {
   far: 200,
 };
 
-const rendererFactories = {
-  three: createThree,
-  canvas2d: createCanvas2D,
-  webgl: createWebGL,
-};
+function populateRendererSelect() {
+  if (!rendererSelect) return;
+  const desiredValue = rendererSelect.value || activeRendererType;
+  rendererSelect.innerHTML = "";
+  let firstValue = null;
+  Object.entries(rendererFactories).forEach(([type, factory]) => {
+    if (!firstValue) firstValue = type;
+    const option = document.createElement("option");
+    option.value = type;
+    option.textContent = factory.getName();
+    rendererSelect.appendChild(option);
+  });
+  const resolved = Object.prototype.hasOwnProperty.call(rendererFactories, desiredValue)
+    ? desiredValue
+    : firstValue;
+  if (resolved) {
+    rendererSelect.value = resolved;
+  }
+}
 
-let cloth = null;
-let renderer = null;
-let activeRendererType = rendererSelect.value;
-let lastTime = performance.now();
-let buildToken = 0;
-let currentParams = null;
-let fpsSmooth = 0;
+function getRendererLabelFromType(type) {
+  if (!type) return "";
+  const factory = rendererFactories[type];
+  if (factory && typeof factory.getName === "function") {
+    return factory.getName();
+  }
+  if (rendererSelect) {
+    const option = rendererSelect.querySelector(`option[value=\"${type}\"]`);
+    if (option) return option.textContent.trim();
+  }
+  return type;
+}
+
+function getCurrentRendererLabel() {
+  if (renderer && typeof renderer.getName === "function") {
+    return renderer.getName();
+  }
+  return getRendererLabelFromType(activeRendererType);
+}
 
 const pointer = {
   x: 0,
@@ -167,7 +364,7 @@ function parseVectorInput(text) {
 function readParams() {
   const nx = Math.max(2, Math.floor(readNumber(nxInput, 16)));
   const ny = Math.max(2, Math.floor(readNumber(nyInput, 16)));
-  const size = Math.max(1, readNumber(clothSizeInput, 20));
+  const size = Math.max(1, readNumber(clothSizeInput, 5));
   const spacing = size / Math.max(1, Math.max(nx, ny) - 1);
   const extentX = spacing * (nx - 1);
   const extentZ = spacing * (ny - 1);
@@ -195,12 +392,40 @@ function readParams() {
 
 function updateStatus(params) {
   if (!status) return;
-  status.textContent = `Renderer: ${activeRendererType} | ${params.nx}x${params.ny} | size ${params.size} | step ${params.maxSubstep.toFixed(3)}s`;
+  const rendererLabel = getCurrentRendererLabel();
+  const sizeText = `${params.size}:${params.nx}x${params.ny}`;
+  const fpsDisplay = Math.max(0, Math.min(999, Math.round(fpsSmooth)));
+  const text = `${rendererLabel} | ${sizeText} | ${fpsDisplay}FPS`;
+  status.textContent = text;
+  if (hudToggleStatus) hudToggleStatus.textContent = text;
+}
+
+function setToolbarCollapsed(collapsed) {
+  if (!toolbarToggle) return;
+  document.body.classList.toggle("toolbar-collapsed", collapsed);
+  toolbarToggle.setAttribute("aria-expanded", collapsed ? "false" : "true");
+  toolbarToggle.textContent = collapsed ? "Menu" : "Hide";
+}
+
+function setHudHidden(hidden) {
+  if (!hud || !hudToggle) return;
+  document.body.classList.toggle("hud-hidden", hidden);
+  if (hudToggleIcon) hudToggleIcon.textContent = hidden ? '+' : '−';
+  if (hudToggleLabel) hudToggleLabel.textContent = hidden ? 'Info' : 'Hide';
+  hudToggle.setAttribute("aria-expanded", hidden ? "false" : "true");
 }
 
 function updateWindToggle() {
-  if (!windToggleBtn || !cloth) return;
-  windToggleBtn.textContent = cloth.windEnabled ? "Wind On" : "Wind Off";
+  if (!windToggleBtn) return;
+  const enabled = cloth ? cloth.windEnabled : desiredWindEnabled;
+  windToggleBtn.textContent = enabled ? "WIND ON" : "WIND OFF";
+}
+
+function setWindEnabledState(next) {
+  desiredWindEnabled = !!next;
+  if (cloth) cloth.setWindEnabled(desiredWindEnabled);
+  updateWindToggle();
+  updateWindText();
 }
 
 function disposeRenderer() {
@@ -216,6 +441,8 @@ function resetSimulation() {
 
 function resetDefaults() {
   if (controlsForm) controlsForm.reset();
+  snapshotAllControls();
+  persistControlState();
   buildRenderer(true);
 }
 
@@ -253,6 +480,7 @@ function applyChanges() {
     applyParamsWithoutRebuild(params);
   }
   snapshotAllControls();
+  persistControlState();
   notify("Settings applied.", { type: "success" });
 }
 
@@ -277,19 +505,22 @@ async function buildRenderer(rebuildCloth = true) {
     updateWindText();
     currentBaseWind = params.wind.slice();
     currentParams = params;
+    setWindEnabledState(desiredWindEnabled);
   }
 
   disposeRenderer();
-  activeRendererType = rendererSelect.value;
+  if (rendererSelect) {
+    activeRendererType = rendererSelect.value;
+  }
   const factory = rendererFactories[activeRendererType];
   if (!factory) return;
-  notify(`Renderer: ${activeRendererType}`, { type: "info" });
 
   let nextRenderer = null;
   try {
     nextRenderer = await factory({ container, cloth, camera, notify });
   } catch (err) {
-    notify(`Renderer failed: ${err?.message ?? err}`, { type: "danger" });
+    const failedLabel = getRendererLabelFromType(activeRendererType);
+    notify(`Renderer failed (${failedLabel}): ${err?.message ?? err}`, { type: "danger" });
     return;
   }
   if (token !== buildToken) {
@@ -486,9 +717,9 @@ function onTouchEnd(e) {
 function onKeyDown(e) {
   if (!cloth) return;
   if (e.key.toLowerCase() === "w") {
-    cloth.setWindEnabled(!cloth.windEnabled);
-    windToggleBtn.textContent = cloth.windEnabled ? "WIND ON" : "WIND OFF";
-    updateWindText();
+    const next = !(cloth ? cloth.windEnabled : desiredWindEnabled);
+    setWindEnabledState(next);
+    persistControlState();
   }
 }
 
@@ -499,11 +730,10 @@ function onResize() {
 function frame(t) {
   const dt = (t - lastTime) / 1000;
   lastTime = t;
-  if (dt > 0 && fpsMeter) {
-    const fpsInstant = 1 / dt;
-    fpsSmooth = fpsSmooth ? fpsSmooth + (fpsInstant - fpsSmooth) * 0.08 : fpsInstant;
-    const display = Math.max(0, Math.min(999, Math.round(fpsSmooth)));
-    fpsMeter.textContent = `${display} FPS`;
+  if (dt > 0) {
+    const fpsInstant = Math.floor( (1 / dt) );
+    fpsSmooth = fpsSmooth ? fpsSmooth + (fpsInstant - fpsSmooth) * 0.02 : fpsInstant;
+    updateStatus(currentParams);
   }
 
   if (cloth && renderer) {
@@ -514,7 +744,7 @@ function frame(t) {
     }
 
     // Apply wind variation
-    if (currentParams && currentParams.windVariation > 0) {
+  if (currentParams && currentParams.windVariation > 0) {
       // Randomly update target with small probability per frame
       if (Math.random() < 0.02) {
         const variation = currentParams.windVariation;
@@ -539,14 +769,24 @@ function frame(t) {
   requestAnimationFrame(frame);
 }
 
-rendererSelect.addEventListener("change", () => buildRenderer(false));
+if (rendererSelect) {
+  rendererSelect.addEventListener("change", () => {
+    persistControlState();
+    buildRenderer(false)
+      .then(() => notify(`Renderer: ${getCurrentRendererLabel()}`, { type: "info" }))
+      .catch(() => {});
+  });
+}
 if (controlsForm) {
   controlsForm.addEventListener("submit", (event) => {
     event.preventDefault();
     applyChanges();
   });
   controlsForm.addEventListener("reset", () => {
-    window.requestAnimationFrame(snapshotAllControls);
+    window.requestAnimationFrame(() => {
+      snapshotAllControls();
+      persistControlState();
+    });
   });
 }
 resetSimBtn.addEventListener("click", resetSimulation);
@@ -588,35 +828,17 @@ function stopUiWheel(event) {
 
 if (toolbarToggle) {
   toolbarToggle.addEventListener("click", () => {
-    const collapsed = document.body.classList.toggle("toolbar-collapsed");
-    toolbarToggle.setAttribute("aria-expanded", collapsed ? "false" : "true");
-    toolbarToggle.textContent = collapsed ? "Menu" : "Hide";
+    const nextCollapsed = !document.body.classList.contains("toolbar-collapsed");
+    setToolbarCollapsed(nextCollapsed);
+    persistControlState();
   });
 }
 
 if (hudToggle) {
   hudToggle.addEventListener("click", () => {
-    const hidden = document.body.classList.toggle("hud-hidden");
-    hudToggle.setAttribute("aria-expanded", hidden ? "false" : "true");
-    if (hidden) {
-      hud.style.display = 'none';
-      document.body.appendChild(hudToggle);
-      hudToggle.style.position = 'fixed';
-      hudToggle.style.bottom = '12px';
-      hudToggle.style.left = '12px';
-      hudToggle.style.right = 'auto';
-      hudToggle.style.top = 'auto';
-      hudToggle.textContent = 'Info';
-    } else {
-      hud.style.display = '';
-      hud.appendChild(hudToggle);
-      hudToggle.style.position = 'absolute';
-      hudToggle.style.top = '6px';
-      hudToggle.style.right = '6px';
-      hudToggle.style.bottom = 'auto';
-      hudToggle.style.left = 'auto';
-      hudToggle.textContent = 'Hide';
-    }
+    const nextHidden = !document.body.classList.contains("hud-hidden");
+    setHudHidden(nextHidden);
+    persistControlState();
   });
 }
 
@@ -628,20 +850,21 @@ function updateWindText() {
 
 if (windToggleBtn) {
   windToggleBtn.addEventListener("click", () => {
-    if (!cloth) return;
-    cloth.setWindEnabled(!cloth.windEnabled);
-    windToggleBtn.textContent = cloth.windEnabled ? "WIND ON" : "WIND OFF";
-    updateWindText();
+    setWindEnabledState(!desiredWindEnabled);
+    persistControlState();
   });
 }
 
 if (windToggleText) {
   windToggleText.addEventListener("click", () => {
-    if (!cloth) return;
-    cloth.setWindEnabled(!cloth.windEnabled);
-    windToggleBtn.textContent = cloth.windEnabled ? "WIND ON" : "WIND OFF";
-    updateWindText();
+    setWindEnabledState(!desiredWindEnabled);
+    persistControlState();
   });
 }
 
-buildRenderer(true).then(() => requestAnimationFrame(frame));
+buildRenderer(true)
+  .then(() => {
+    notify(`Renderer: ${getCurrentRendererLabel()}`, { type: "info" });
+    requestAnimationFrame(frame);
+  })
+  .catch(() => requestAnimationFrame(frame));

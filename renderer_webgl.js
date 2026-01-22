@@ -1,5 +1,7 @@
 import { createAxesOverlay } from "./axes_overlay.js";
 
+const RENDERER_NAME = "WebGL";
+
 // create a raw WebGL renderer instance.
 export function createRenderer({ container, cloth, camera, notify }) {
   const canvas = document.createElement("canvas");
@@ -25,7 +27,7 @@ export function createRenderer({ container, cloth, camera, notify }) {
     };
   }
 
-  gl.clearColor(1, 1, 1, 1);
+  gl.clearColor(0.88, 0.95, 1.0, 1);
   gl.enable(gl.DEPTH_TEST);
 
   const VS = `
@@ -215,5 +217,11 @@ void main() {
   resize();
 
   // return the Public API for the renderer
-  return { render, resize, getSize, dispose };
+  function getName() {
+    return RENDERER_NAME;
+  }
+
+  return { render, resize, getSize, dispose, getName };
 }
+
+createRenderer.getName = () => RENDERER_NAME;
