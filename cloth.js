@@ -128,9 +128,9 @@ export class Cloth {
 
   // set or update wind acceleration vector.
   setWind(vec = [0, 0, 0]) {
-    this.wind[0] = vec[0] ?? 0;
-    this.wind[1] = vec[1] ?? 0;
-    this.wind[2] = vec[2] ?? 0;
+    this.wind[0] = vec[0] == null ? 0 : vec[0];
+    this.wind[1] = vec[1] == null ? 0 : vec[1];
+    this.wind[2] = vec[2] == null ? 0 : vec[2];
     this.windEnabled = true;
   }
 
@@ -142,13 +142,13 @@ export class Cloth {
   // provide a pointer ray and active state for grabbing.
   setPointerRay(origin = [0, 0, 0], dir = [0, 0, -1], active = false) {
     const wasDown = this.pointerDown;
-    this.pointerRayOrigin[0] = origin[0] ?? 0;
-    this.pointerRayOrigin[1] = origin[1] ?? 0;
-    this.pointerRayOrigin[2] = origin[2] ?? 0;
+    this.pointerRayOrigin[0] = origin[0] == null ? 0 : origin[0];
+    this.pointerRayOrigin[1] = origin[1] == null ? 0 : origin[1];
+    this.pointerRayOrigin[2] = origin[2] == null ? 0 : origin[2];
 
-    let dx = dir[0] ?? 0;
-    let dy = dir[1] ?? 0;
-    let dz = dir[2] ?? -1;
+    let dx = dir[0] == null ? 0 : dir[0];
+    let dy = dir[1] == null ? 0 : dir[1];
+    let dz = dir[2] == null ? -1 : dir[2];
     const len = Math.hypot(dx, dy, dz) || 1;
     dx /= len; dy /= len; dz /= len;
     this.pointerRayDir[0] = dx;
@@ -316,9 +316,9 @@ export class Cloth {
   // Private: ray proximity test against vertices.
   _rayPick(origin, dir, threshold) {
     const { pos, invMass } = this;
-    let dx = dir[0] ?? 0;
-    let dy = dir[1] ?? 0;
-    let dz = dir[2] ?? -1;
+    let dx = dir[0] == null ? 0 : dir[0];
+    let dy = dir[1] == null ? 0 : dir[1];
+    let dz = dir[2] == null ? -1 : dir[2];
     const len = Math.hypot(dx, dy, dz) || 1;
     dx /= len; dy /= len; dz /= len;
 

@@ -177,8 +177,8 @@ void main() {
 
     gl.clear(gl.COLOR_BUFFER_BIT | gl.DEPTH_BUFFER_BIT);
 
-    const near = camera.near ?? 0.01;
-    const far = camera.far ?? 100;
+    const near = camera.near != null ? camera.near : 0.01;
+    const far = camera.far != null ? camera.far : 100;
     const P = perspective(camera.fov, canvas.width / canvas.height, near, far);
     const V = lookAt(camera.eye, camera.target, camera.up);
     const MVP = mul(P, V);

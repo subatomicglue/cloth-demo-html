@@ -176,7 +176,9 @@ export function createToastManager() {
     const timeoutId = window.setTimeout(remove, timeout);
 
     const dismiss = (event) => {
-      event?.stopPropagation();
+      if (event && event.stopPropagation) {
+        event.stopPropagation();
+      }
       window.clearTimeout(timeoutId);
       remove();
     };

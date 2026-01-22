@@ -39,9 +39,9 @@ const TOAST_COLORS = {
   danger: "#f87171",
 };
 const notify = (message, options = {}) => {
-  const type = options.type ?? "info";
+  const type = options.type == null ? "info" : options.type;
   const fallbackColor = TOAST_COLORS[type] || TOAST_COLORS.info;
-  const color = options.color ?? fallbackColor;
+  const color = options.color == null ? fallbackColor : options.color;
   toastManager.notify(message, { ...options, type, color });
 };
 
@@ -520,7 +520,8 @@ async function buildRenderer(rebuildCloth = true) {
     nextRenderer = await factory({ container, cloth, camera, notify });
   } catch (err) {
     const failedLabel = getRendererLabelFromType(activeRendererType);
-    notify(`Renderer failed (${failedLabel}): ${err?.message ?? err}`, { type: "danger" });
+    const errorMessage = err && err.message ? err.message : err;
+    notify(`Renderer failed (${failedLabel}): ${errorMessage}`, { type: "danger" });
     return;
   }
   if (token !== buildToken) {
@@ -810,6 +811,15 @@ window.addEventListener("touchend", onTouchEnd);
 window.addEventListener("touchcancel", onTouchEnd);
 window.addEventListener("keydown", onKeyDown);
 window.addEventListener("resize", onResize);
+window.addEventListener("error", (event) => {
+  const msg = event && event.message ? event.message : "Unknown script error";
+  notify(`Error: ${msg}`, { type: "danger" });
+});
+window.addEventListener("unhandledrejection", (event) => {
+  const reason = event && event.reason ? event.reason : "Unhandled promise rejection";
+  const msg = typeof reason === "string" ? reason : (reason && reason.message) ? reason.message : String(reason);
+  notify(`Promise error: ${msg}`, { type: "danger" });
+});
 
 function stopUiPointer(event) {
   event.stopPropagation();

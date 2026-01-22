@@ -16,10 +16,10 @@ export function createRenderer({ container, cloth, camera, notify }) {
 
   const scene = new THREE.Scene();
   const cam = new THREE.PerspectiveCamera(
-    camera.fovDeg ?? (camera.fov * 180 / Math.PI),
+    camera.fovDeg != null ? camera.fovDeg : (camera.fov * 180 / Math.PI),
     1,
-    camera.near ?? 0.01,
-    camera.far ?? 100
+    camera.near != null ? camera.near : 0.01,
+    camera.far != null ? camera.far : 100
   );
   cam.position.set(camera.eye[0], camera.eye[1], camera.eye[2]);
   cam.lookAt(camera.target[0], camera.target[1], camera.target[2]);
@@ -77,8 +77,8 @@ export function createRenderer({ container, cloth, camera, notify }) {
     const dpr = window.devicePixelRatio || 1;
     renderer.setPixelRatio(dpr);
     renderer.setSize(width, height, false);
-    cam.near = camera.near ?? cam.near;
-    cam.far = camera.far ?? cam.far;
+    cam.near = camera.near != null ? camera.near : cam.near;
+    cam.far = camera.far != null ? camera.far : cam.far;
     cam.aspect = width / height;
     cam.updateProjectionMatrix();
     axes.resize(width, height);
