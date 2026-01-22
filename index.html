@@ -138,6 +138,25 @@
       box-shadow: 0 8px 18px rgba(15, 107, 91, 0.3);
     }
 
+    #controlsFooter {
+      grid-column: 1 / -1;
+      display: flex;
+      justify-content: flex-end;
+      align-items: center;
+      font-size: 12px;
+      letter-spacing: 0.12em;
+      color: #5b4a3c;
+      text-transform: uppercase;
+    }
+
+    #fpsMeter {
+      font-family: var(--mono);
+      padding: 6px 12px;
+      border-radius: 999px;
+      background: rgba(14, 12, 10, 0.08);
+      border: 1px solid rgba(14, 12, 10, 0.12);
+    }
+
     #hud {
       position: fixed;
       left: 18px;
@@ -347,6 +366,9 @@
         <button id="applyBtn" type="submit">Apply</button>
         <button id="resetSimBtn" type="button">Reset Simulation</button>
         <button id="resetDefaultsBtn" type="button">Reset to Defaults</button>
+        <div id="controlsFooter">
+          <span id="fpsMeter">-- FPS</span>
+        </div>
       </form>
     </header>
 

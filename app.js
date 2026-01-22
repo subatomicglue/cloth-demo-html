@@ -28,6 +28,7 @@ const applyBtn = document.getElementById("applyBtn");
 const resetSimBtn = document.getElementById("resetSimBtn");
 const resetDefaultsBtn = document.getElementById("resetDefaultsBtn");
 const status = document.getElementById("status");
+const fpsMeter = document.getElementById("fpsMeter");
 const toastManager = createToastManager();
 const TOAST_COLORS = {
   info: "#7dd3fc",
@@ -104,6 +105,7 @@ let activeRendererType = rendererSelect.value;
 let lastTime = performance.now();
 let buildToken = 0;
 let currentParams = null;
+let fpsSmooth = 0;
 
 const pointer = {
   x: 0,
@@ -497,6 +499,12 @@ function onResize() {
 function frame(t) {
   const dt = (t - lastTime) / 1000;
   lastTime = t;
+  if (dt > 0 && fpsMeter) {
+    const fpsInstant = 1 / dt;
+    fpsSmooth = fpsSmooth ? fpsSmooth + (fpsInstant - fpsSmooth) * 0.08 : fpsInstant;
+    const display = Math.max(0, Math.min(999, Math.round(fpsSmooth)));
+    fpsMeter.textContent = `${display} FPS`;
+  }
 
   if (cloth && renderer) {
     const size = renderer.getSize ? renderer.getSize() : null;

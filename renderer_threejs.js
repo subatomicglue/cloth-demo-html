@@ -32,18 +32,33 @@ export function createRenderer({ container, cloth, camera, notify }) {
   geom.setAttribute("position", new THREE.BufferAttribute(positions, 3));
   geom.setIndex(new THREE.BufferAttribute(triIdx, 1));
 
-  const mesh = new THREE.Mesh(
+  const frontColor = new THREE.Color("#ff4d4d");
+  const backColor = new THREE.Color("#ffffff");
+  const edgeColor = new THREE.Color("#2563eb");
+
+  const meshFront = new THREE.Mesh(
     geom,
-    new THREE.MeshLambertMaterial({ color: 0xff0000, flatShading: true })
+    new THREE.MeshBasicMaterial({
+      color: frontColor,
+      side: THREE.FrontSide,
+    })
   );
-  scene.add(mesh);
+  const meshBack = new THREE.Mesh(
+    geom,
+    new THREE.MeshBasicMaterial({
+      color: backColor,
+      side: THREE.BackSide,
+    })
+  );
+  scene.add(meshBack);
+  scene.add(meshFront);
 
   const lineGeom = new THREE.BufferGeometry();
   lineGeom.setAttribute("position", new THREE.BufferAttribute(positions, 3));
   lineGeom.setIndex(new THREE.BufferAttribute(lineIdx, 1));
   const lines = new THREE.LineSegments(
     lineGeom,
-    new THREE.LineBasicMaterial({ color: 0x0000ff })
+    new THREE.LineBasicMaterial({ color: edgeColor })
   );
   scene.add(lines);
 
@@ -88,7 +103,8 @@ export function createRenderer({ container, cloth, camera, notify }) {
     renderer.dispose();
     geom.dispose();
     lineGeom.dispose();
-    mesh.material.dispose();
+    meshFront.material.dispose();
+    meshBack.material.dispose();
     lines.material.dispose();
     canvas.remove();
   }

@@ -72,7 +72,6 @@ export function createRenderer({ container, cloth, camera, notify }) {
 
   const pos = cloth.getPositions();
   const tri = cloth.getTriangleIndices();
-  const lines = cloth.getLineIndices();
 
   // draw the current cloth state.
   function render() {
@@ -87,31 +86,41 @@ export function createRenderer({ container, cloth, camera, notify }) {
       projected[i] = project(pos[p], pos[p + 1], pos[p + 2], basis);
     }
 
-    ctx.fillStyle = "#ff0000";
+    const faces = [];
     for (let k = 0; k < tri.length; k += 3) {
-      const a = projected[tri[k]];
-      const b = projected[tri[k + 1]];
-      const c = projected[tri[k + 2]];
+      const ia = tri[k];
+      const ib = tri[k + 1];
+      const ic = tri[k + 2];
+      const a = projected[ia];
+      const b = projected[ib];
+      const c = projected[ic];
       if (!a || !b || !c) continue;
-      ctx.beginPath();
-      ctx.moveTo(a.x, a.y);
-      ctx.lineTo(b.x, b.y);
-      ctx.lineTo(c.x, c.y);
-      ctx.closePath();
-      ctx.fill();
+      const depth = (a.z + b.z + c.z) / 3;
+      const cross =
+        (b.x - a.x) * (c.y - a.y) -
+        (b.y - a.y) * (c.x - a.x);
+      const isBackface = cross > 0;
+      faces.push({ a, b, c, depth, isBackface });
     }
 
-    ctx.strokeStyle = "#0000ff";
+    faces.sort((fa, fb) => fb.depth - fa.depth);
     ctx.lineWidth = 1;
-    ctx.beginPath();
-    for (let k = 0; k < lines.length; k += 2) {
-      const a = projected[lines[k]];
-      const b = projected[lines[k + 1]];
-      if (!a || !b) continue;
-      ctx.moveTo(a.x, a.y);
-      ctx.lineTo(b.x, b.y);
+    for (const face of faces) {
+      ctx.beginPath();
+      ctx.moveTo(face.a.x, face.a.y);
+      ctx.lineTo(face.b.x, face.b.y);
+      ctx.lineTo(face.c.x, face.c.y);
+      ctx.closePath();
+      if (face.isBackface) {
+        ctx.fillStyle = "rgba(255, 255, 255, 0.9)";
+        ctx.strokeStyle = "#7dd3fc";
+      } else {
+        ctx.fillStyle = "#ff4d4d";
+        ctx.strokeStyle = "#2563eb";
+      }
+      ctx.fill();
+      ctx.stroke();
     }
-    ctx.stroke();
 
     axes.draw();
   }

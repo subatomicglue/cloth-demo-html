@@ -38,9 +38,12 @@ void main() {
 
   const FS = `
 precision mediump float;
-uniform vec4 uColor;
+uniform vec3 uFrontColor;
+uniform vec3 uBackColor;
+uniform float uOpacity;
 void main() {
-  gl_FragColor = uColor;
+  vec3 color = gl_FrontFacing ? uFrontColor : uBackColor;
+  gl_FragColor = vec4(color, uOpacity);
 }
 `;
 
@@ -65,7 +68,9 @@ void main() {
 
   const aPos = gl.getAttribLocation(prog, "aPos");
   const uMVP = gl.getUniformLocation(prog, "uMVP");
-  const uColor = gl.getUniformLocation(prog, "uColor");
+  const uFrontColor = gl.getUniformLocation(prog, "uFrontColor");
+  const uBackColor = gl.getUniformLocation(prog, "uBackColor");
+  const uOpacity = gl.getUniformLocation(prog, "uOpacity");
 
   const positions = cloth.getPositions();
 
@@ -177,11 +182,15 @@ void main() {
     const MVP = mul(P, V);
     gl.uniformMatrix4fv(uMVP, false, MVP);
 
-    gl.uniform4f(uColor, 1, 0, 0, 1);
+    gl.uniform3f(uFrontColor, 1.0, 0.302, 0.302);
+    gl.uniform3f(uBackColor, 1.0, 1.0, 1.0);
+    gl.uniform1f(uOpacity, 1.0);
     gl.bindBuffer(gl.ELEMENT_ARRAY_BUFFER, iboTri);
     gl.drawElements(gl.TRIANGLES, triIdx.length, indexType, 0);
 
-    gl.uniform4f(uColor, 0, 0, 1, 1);
+    gl.uniform3f(uFrontColor, 0.145, 0.388, 0.922);
+    gl.uniform3f(uBackColor, 0.145, 0.388, 0.922);
+    gl.uniform1f(uOpacity, 1.0);
     gl.bindBuffer(gl.ELEMENT_ARRAY_BUFFER, iboLine);
     gl.drawElements(gl.LINES, lineIdx.length, indexType, 0);
 
