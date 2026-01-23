@@ -98,11 +98,13 @@ function getActiveBackgroundColor() {
 
 function updateControlsWidgetColors(bg) {
   const hudMinimized = document.body.classList.contains("hud-hidden");
+  const codeLink = document.getElementById("codeLink");
 
   // Controls Widget is maximized: restore the status text color.
   if (!hudMinimized) {
     if (hudToggleIcon) hudToggleIcon.style.color = "#fff";
     if (hudToggleStatus) hudToggleStatus.style.color = "#fbd3a4";
+    if (codeLink) codeLink.style.color = "#0e0c0a";
     return;
   }
 
@@ -111,6 +113,7 @@ function updateControlsWidgetColors(bg) {
   const cssColor = rgbToCss(inverted);
   if (hudToggleIcon && cssColor) hudToggleIcon.style.color = cssColor;
   if (hudToggleStatus && cssColor) hudToggleStatus.style.color = cssColor;
+  if (codeLink && cssColor) codeLink.style.color = cssColor;
 }
 
 let cloth = null;
@@ -378,7 +381,7 @@ const pointer = {
 
 function isUiEventTarget(target) {
   if (!(target instanceof Element)) return false;
-  return !!target.closest("#toolbar, #hud, #toolbarToggle, #hudToggle, #toast-notification-container");
+  return !!target.closest("#toolbar, #hud, #toolbarToggle, #hudToggle, #codeLink, #toast-notification-container");
 }
 
 function preventTouchPointerDefault(event) {
