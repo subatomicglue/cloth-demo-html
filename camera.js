@@ -89,12 +89,24 @@ export class LookAtCamera {
 
   panBy(deltaX, deltaY) {
     const panSpeed = PAN_SCALE * this.orbit.radius;
-    const offsetX = -deltaX * panSpeed;
-    const offsetY = deltaY * panSpeed;
-    this.target[0] += offsetX;
-    this.target[1] += offsetY;
-    this.eye[0] += offsetX;
-    this.eye[1] += offsetY;
+    const forward = normalizeVec([
+      this.target[0] - this.eye[0],
+      this.target[1] - this.eye[1],
+      this.target[2] - this.eye[2],
+    ]);
+    const right = normalizeVec(crossVec(forward, this.up));
+    const screenUp = normalizeVec(crossVec(right, forward));
+    const offset = [
+      (-deltaX * panSpeed) * right[0] + (deltaY * panSpeed) * screenUp[0],
+      (-deltaX * panSpeed) * right[1] + (deltaY * panSpeed) * screenUp[1],
+      (-deltaX * panSpeed) * right[2] + (deltaY * panSpeed) * screenUp[2],
+    ];
+    this.target[0] += offset[0];
+    this.target[1] += offset[1];
+    this.target[2] += offset[2];
+    this.eye[0] += offset[0];
+    this.eye[1] += offset[1];
+    this.eye[2] += offset[2];
   }
 
   screenRay(px, py, width, height) {
