@@ -76,7 +76,7 @@ export class LookAtCamera {
     this.orbit.yaw -= deltaX * ORBIT_SPEED;
     this.orbit.pitch = Math.max(
       ORBIT_PITCH_MIN,
-      Math.min(ORBIT_PITCH_MAX, this.orbit.pitch - deltaY * ORBIT_SPEED)
+      Math.min(ORBIT_PITCH_MAX, this.orbit.pitch + deltaY * ORBIT_SPEED)
     );
     this.applyOrbit();
   }
