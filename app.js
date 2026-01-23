@@ -628,7 +628,7 @@ async function buildRenderer(rebuildCloth = true) {
 
 function onPointerMove(e) {
   preventTouchPointerDefault(e);
-  if (e.pointerType === "touch" && e.isPrimary === false) return;
+  if (e.pointerType === "touch") return;
   if (isUiEventTarget(e.target)) return;
   pointer.x = e.clientX;
   pointer.y = e.clientY;
@@ -661,7 +661,7 @@ function onPointerMove(e) {
 
 function onPointerDown(e) {
   preventTouchPointerDefault(e);
-  if (e.pointerType === "touch" && e.isPrimary === false) return;
+  if (e.pointerType === "touch") return;
   if (isUiEventTarget(e.target)) return;
   pointer.x = e.clientX;
   pointer.y = e.clientY;
@@ -693,7 +693,7 @@ function onPointerDown(e) {
 
 function onPointerUp(e) {
   preventTouchPointerDefault(e);
-  if (e.pointerType === "touch" && e.isPrimary === false) return;
+  if (e.pointerType === "touch") return;
   releasePointerInteraction();
 }
 
