@@ -732,13 +732,17 @@ function onTouchStart(e) {
     return;
   }
 
-  if (touchCount === 1 && cloth) {
+  if (touchCount === 1) {
     const touch = e.touches[0];
     pointer.x = pointer.lx = touch.clientX;
     pointer.y = pointer.ly = touch.clientY;
     const size = renderer && renderer.getSize ? renderer.getSize() : null;
     const ray = size ? camera.screenRay(touch.clientX, touch.clientY, size.width, size.height) : null;
-    tryBeginGrab(ray);
+    const grabbed = tryBeginGrab(ray);
+    if (!grabbed) {
+      pointer.down = true;
+      pointer.mode = "orbit";
+    }
   } else if (touchCount >= 2) {
     if (pointer.mode === "grab") {
       releasePointerInteraction();
@@ -774,14 +778,27 @@ function onTouchMove(e) {
     return;
   }
   if (e.touches.length === 1) {
+    const touch = e.touches[0];
     if (pointer.mode === "grab" && cloth) {
-      const touch = e.touches[0];
       pointer.x = pointer.lx = touch.clientX;
       pointer.y = pointer.ly = touch.clientY;
       const size = renderer && renderer.getSize ? renderer.getSize() : null;
       const ray = size ? camera.screenRay(touch.clientX, touch.clientY, size.width, size.height) : null;
       if (ray) cloth.setPointerRay(ray.o, ray.d, true);
+      e.preventDefault();
+      return;
     }
+    if (pointer.mode === "orbit") {
+      const dx = touch.clientX - pointer.lx;
+      const dy = touch.clientY - pointer.ly;
+      camera.orbitBy(dx, dy);
+      pointer.x = pointer.lx = touch.clientX;
+      pointer.y = pointer.ly = touch.clientY;
+      e.preventDefault();
+      return;
+    }
+    pointer.x = pointer.lx = touch.clientX;
+    pointer.y = pointer.ly = touch.clientY;
     e.preventDefault();
     return;
   }
