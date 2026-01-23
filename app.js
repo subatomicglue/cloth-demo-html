@@ -108,7 +108,7 @@ function updateControlsWidgetColors(bg) {
   }
 
   // Controls Widget is minimized: invert the status text color relative to the renderer's background for visibility.
-  const inverted = invertRgb( bg );
+  const inverted = invertRgb(bg);
   const cssColor = rgbToCss(inverted);
   if (hudToggleIcon && cssColor) hudToggleIcon.style.color = cssColor;
   if (hudToggleStatus && cssColor) hudToggleStatus.style.color = cssColor;
@@ -381,9 +381,16 @@ const pointer = {
   y: 0,
   down: false,
   shift: false,
+  right: false,
   lx: 0,
   ly: 0,
   mode: "none",
+};
+
+const panState = {
+  active: false,
+  startTarget: [0, 0, 0],
+  startEye: [0, 0, 0],
 };
 
 function isUiEventTarget(target) {
@@ -680,6 +687,24 @@ function onPointerMove(e) {
   pointer.x = e.clientX;
   pointer.y = e.clientY;
   pointer.shift = e.shiftKey;
+  if (pointer.down && pointer.mode === "pan") {
+    const dx = e.clientX - pointer.lx;
+    const dy = e.clientY - pointer.ly;
+    const panSpeed = 0.0025 * orbit.radius;
+    const targetX = panState.startTarget[0] - dx * panSpeed;
+    const targetY = panState.startTarget[1] + dy * panSpeed;
+    camera.target[0] = targetX;
+    camera.target[1] = targetY;
+    camera.target[2] = panState.startTarget[2];
+    camera.eye[0] = targetX + (panState.startEye[0] - panState.startTarget[0]);
+    camera.eye[1] = targetY + (panState.startEye[1] - panState.startTarget[1]);
+    camera.eye[2] = camera.target[2] + (panState.startEye[2] - panState.startTarget[2]);
+    pointer.lx = e.clientX;
+    pointer.ly = e.clientY;
+    panState.startTarget = camera.target.slice();
+    panState.startEye = camera.eye.slice();
+    return;
+  }
   if (pointer.down && pointer.shift && pointer.mode !== "grab") {
     pointer.mode = "wind";
   }
@@ -708,9 +733,18 @@ function onPointerDown(e) {
   pointer.y = e.clientY;
   pointer.down = true;
   pointer.shift = e.shiftKey;
+  pointer.right = e.button === 2 || (e.button === 0 && (e.ctrlKey || e.metaKey));
   pointer.lx = e.clientX;
   pointer.ly = e.clientY;
   pointer.mode = "none";
+
+  if (pointer.right) {
+    pointer.mode = "pan";
+    panState.active = true;
+    panState.startTarget = camera.target.slice();
+    panState.startEye = camera.eye.slice();
+    return;
+  }
 
   if (pointer.shift) {
     pointer.mode = "wind";
@@ -733,7 +767,9 @@ function onPointerDown(e) {
 function onPointerUp(e) {
   preventTouchPointerDefault(e);
   pointer.down = false;
+  pointer.right = false;
   pointer.mode = "none";
+  panState.active = false;
   if (cloth) cloth.setPointerRay([0, 0, 0], [0, 0, -1], false);
 }
 
@@ -754,6 +790,7 @@ function onWheel(e) {
 }
 
 let pinchLastDist = null;
+let panTouchStart = null;
 
 function onTouchStart(e) {
   if (isUiEventTarget(e.target)) return;
@@ -761,8 +798,15 @@ function onTouchStart(e) {
     const dx = e.touches[0].clientX - e.touches[1].clientX;
     const dy = e.touches[0].clientY - e.touches[1].clientY;
     pinchLastDist = Math.hypot(dx, dy);
+    panTouchStart = {
+      x: (e.touches[0].clientX + e.touches[1].clientX) * 0.5,
+      y: (e.touches[0].clientY + e.touches[1].clientY) * 0.5,
+      target: camera.target.slice(),
+      eye: camera.eye.slice(),
+    };
   } else {
     pinchLastDist = null;
+    panTouchStart = null;
   }
   if (e.touches.length >= 1) {
     e.preventDefault();
@@ -783,12 +827,34 @@ function onTouchMove(e) {
     const delta = pinchLastDist - dist;
     applyZoomDelta(delta * ZOOM_PINCH_SPEED);
   }
+  if (panTouchStart) {
+    const cx = (e.touches[0].clientX + e.touches[1].clientX) * 0.5;
+    const cy = (e.touches[0].clientY + e.touches[1].clientY) * 0.5;
+    const dxPan = cx - panTouchStart.x;
+    const dyPan = cy - panTouchStart.y;
+    const panSpeed = 0.0025 * orbit.radius;
+    const targetX = panTouchStart.target[0] - dxPan * panSpeed;
+    const targetY = panTouchStart.target[1] + dyPan * panSpeed;
+    camera.target[0] = targetX;
+    camera.target[1] = targetY;
+    camera.target[2] = panTouchStart.target[2];
+    camera.eye[0] = targetX + (panTouchStart.eye[0] - panTouchStart.target[0]);
+    camera.eye[1] = targetY + (panTouchStart.eye[1] - panTouchStart.target[1]);
+    camera.eye[2] = camera.target[2] + (panTouchStart.eye[2] - panTouchStart.target[2]);
+    panTouchStart.x = cx;
+    panTouchStart.y = cy;
+    panTouchStart.target = camera.target.slice();
+    panTouchStart.eye = camera.eye.slice();
+  }
   pinchLastDist = dist;
   e.preventDefault();
 }
 
 function onTouchEnd(e) {
-  if (e.touches.length < 2) pinchLastDist = null;
+  if (e.touches.length < 2) {
+    pinchLastDist = null;
+    panTouchStart = null;
+  }
 }
 
 function onKeyDown(e) {
