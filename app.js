@@ -2,6 +2,7 @@ import { Cloth } from "./cloth.js";
 import { createRenderer as createCanvas2D } from "./renderer_canvas2d.js";
 import { createRenderer as createWebGL } from "./renderer_webgl.js";
 import { createRenderer as createThree } from "./renderer_threejs.js";
+import { LookAtCamera } from "./camera.js";
 import { createToastManager } from "./toast_notification.js";
 
 const pendingGlobalErrors = [];
@@ -326,15 +327,14 @@ let currentBaseWind = [-20, 0, 0];
 let currentWindFactor = 1;
 let targetWindFactor = 1;
 
-const camera = {
+const camera = new LookAtCamera({
   eye: [0, 1.2, 2.2],
   target: [0, 0, 0],
   up: [0, 1, 0],
-  fov: 55 * Math.PI / 180,
   fovDeg: 55,
   near: 0.01,
   far: 200,
-};
+});
 
 function populateRendererSelect() {
   if (!rendererSelect) return;
@@ -387,11 +387,6 @@ const pointer = {
   mode: "none",
 };
 
-const panState = {
-  active: false,
-  startTarget: [0, 0, 0],
-  startEye: [0, 0, 0],
-};
 
 function isUiEventTarget(target) {
   if (!(target instanceof Element)) return false;
@@ -404,11 +399,6 @@ function preventTouchPointerDefault(event) {
   }
 }
 
-const orbit = {
-  yaw: 0,
-  pitch: 0,
-  radius: 1,
-};
 
 function readNumber(input, fallback) {
   const value = Number.parseFloat(input.value);
@@ -574,12 +564,7 @@ async function buildRenderer(rebuildCloth = true) {
       (params.nx - 1) * params.spacing,
       (params.ny - 1) * params.spacing
     );
-    const distance = (maxExtent * 0.5) / Math.tan(camera.fov * 0.5);
-    camera.eye = [distance * 0.35, maxExtent * 0.3 + 0.6, distance * 1.1];
-    camera.target = [0, 0, 0];
-    camera.near = 0.01;
-    camera.far = Math.max(200, distance * 3 + maxExtent * 4);
-    syncOrbitFromCamera();
+    camera.reframeForExtent(maxExtent);
 
     cloth = new Cloth(params);
     cloth.setWind(params.wind);
@@ -618,68 +603,6 @@ async function buildRenderer(rebuildCloth = true) {
   updateGithubLinkColor( getActiveBackgroundColor() );
 }
 
-function normalize(v) {
-  const l = Math.hypot(v[0], v[1], v[2]) || 1;
-  return [v[0] / l, v[1] / l, v[2] / l];
-}
-
-function syncOrbitFromCamera() {
-  const dx = camera.eye[0] - camera.target[0];
-  const dy = camera.eye[1] - camera.target[1];
-  const dz = camera.eye[2] - camera.target[2];
-  orbit.radius = Math.hypot(dx, dy, dz) || 1;
-  orbit.yaw = Math.atan2(dx, dz);
-  orbit.pitch = Math.asin(dy / orbit.radius);
-}
-
-function applyOrbitCamera() {
-  const cp = Math.cos(orbit.pitch);
-  const sp = Math.sin(orbit.pitch);
-  const cy = Math.cos(orbit.yaw);
-  const sy = Math.sin(orbit.yaw);
-  camera.eye = [
-    camera.target[0] + orbit.radius * sy * cp,
-    camera.target[1] + orbit.radius * sp,
-    camera.target[2] + orbit.radius * cy * cp,
-  ];
-}
-
-function cross(a, b) {
-  return [
-    a[1] * b[2] - a[2] * b[1],
-    a[2] * b[0] - a[0] * b[2],
-    a[0] * b[1] - a[1] * b[0],
-  ];
-}
-
-function screenRay(px, py, width, height) {
-  if (!width || !height) return null;
-  const nx = (px / width) * 2 - 1;
-  const ny = -(py / height) * 2 + 1;
-  const aspect = width / height;
-  const t = Math.tan(camera.fov * 0.5);
-
-  let dx = nx * t * aspect;
-  let dy = ny * t;
-  let dz = -1;
-  let l = Math.hypot(dx, dy, dz) || 1;
-  dx /= l; dy /= l; dz /= l;
-
-  const f = normalize([
-    camera.target[0] - camera.eye[0],
-    camera.target[1] - camera.eye[1],
-    camera.target[2] - camera.eye[2],
-  ]);
-  const r = normalize(cross(f, camera.up));
-  const u = cross(r, f);
-
-  const wx = r[0] * dx + u[0] * dy + f[0] * (-dz);
-  const wy = r[1] * dx + u[1] * dy + f[1] * (-dz);
-  const wz = r[2] * dx + u[2] * dy + f[2] * (-dz);
-  l = Math.hypot(wx, wy, wz) || 1;
-
-  return { o: camera.eye, d: [wx / l, wy / l, wz / l] };
-}
 
 function onPointerMove(e) {
   preventTouchPointerDefault(e);
@@ -690,19 +613,9 @@ function onPointerMove(e) {
   if (pointer.down && pointer.mode === "pan") {
     const dx = e.clientX - pointer.lx;
     const dy = e.clientY - pointer.ly;
-    const panSpeed = 0.0025 * orbit.radius;
-    const targetX = panState.startTarget[0] - dx * panSpeed;
-    const targetY = panState.startTarget[1] + dy * panSpeed;
-    camera.target[0] = targetX;
-    camera.target[1] = targetY;
-    camera.target[2] = panState.startTarget[2];
-    camera.eye[0] = targetX + (panState.startEye[0] - panState.startTarget[0]);
-    camera.eye[1] = targetY + (panState.startEye[1] - panState.startTarget[1]);
-    camera.eye[2] = camera.target[2] + (panState.startEye[2] - panState.startTarget[2]);
+    camera.panBy(dx, dy);
     pointer.lx = e.clientX;
     pointer.ly = e.clientY;
-    panState.startTarget = camera.target.slice();
-    panState.startEye = camera.eye.slice();
     return;
   }
   if (pointer.down && pointer.shift && pointer.mode !== "grab") {
@@ -717,10 +630,7 @@ function onPointerMove(e) {
   if (pointer.down && pointer.mode === "orbit") {
     const dx = e.clientX - pointer.lx;
     const dy = e.clientY - pointer.ly;
-    const speed = 0.005;
-    orbit.yaw -= dx * speed;
-    orbit.pitch = Math.max(-1.35, Math.min(1.35, orbit.pitch - dy * speed));
-    applyOrbitCamera();
+    camera.orbitBy(dx, dy);
   }
   pointer.lx = e.clientX;
   pointer.ly = e.clientY;
@@ -740,9 +650,6 @@ function onPointerDown(e) {
 
   if (pointer.right) {
     pointer.mode = "pan";
-    panState.active = true;
-    panState.startTarget = camera.target.slice();
-    panState.startEye = camera.eye.slice();
     return;
   }
 
@@ -753,7 +660,7 @@ function onPointerDown(e) {
 
   if (cloth) {
     const size = renderer && renderer.getSize ? renderer.getSize() : null;
-    const ray = size ? screenRay(pointer.x, pointer.y, size.width, size.height) : null;
+    const ray = size ? camera.screenRay(pointer.x, pointer.y, size.width, size.height) : null;
     if (ray && cloth.hitTestRay(ray.o, ray.d)) {
       pointer.mode = "grab";
       cloth.setPointerRay(ray.o, ray.d, true);
@@ -769,28 +676,20 @@ function onPointerUp(e) {
   pointer.down = false;
   pointer.right = false;
   pointer.mode = "none";
-  panState.active = false;
   if (cloth) cloth.setPointerRay([0, 0, 0], [0, 0, -1], false);
 }
 
 const ZOOM_WHEEL_SPEED = 0.0015;
 const ZOOM_PINCH_SPEED = 0.009; // pinch feels slower, so boost response
 
-function applyZoomDelta(delta) {
-  if (!Number.isFinite(delta) || delta === 0) return;
-  const scale = Math.exp(delta);
-  orbit.radius = Math.min(200, Math.max(0.5, orbit.radius * scale));
-  applyOrbitCamera();
-}
-
 function onWheel(e) {
   if (isUiEventTarget(e.target)) return;
   e.preventDefault();
-  applyZoomDelta(e.deltaY * ZOOM_WHEEL_SPEED);
+  camera.zoomBy(e.deltaY * ZOOM_WHEEL_SPEED);
 }
 
 let pinchLastDist = null;
-let panTouchStart = null;
+let panTouchLast = null;
 
 function onTouchStart(e) {
   if (isUiEventTarget(e.target)) return;
@@ -798,15 +697,13 @@ function onTouchStart(e) {
     const dx = e.touches[0].clientX - e.touches[1].clientX;
     const dy = e.touches[0].clientY - e.touches[1].clientY;
     pinchLastDist = Math.hypot(dx, dy);
-    panTouchStart = {
+    panTouchLast = {
       x: (e.touches[0].clientX + e.touches[1].clientX) * 0.5,
       y: (e.touches[0].clientY + e.touches[1].clientY) * 0.5,
-      target: camera.target.slice(),
-      eye: camera.eye.slice(),
     };
   } else {
     pinchLastDist = null;
-    panTouchStart = null;
+    panTouchLast = null;
   }
   if (e.touches.length >= 1) {
     e.preventDefault();
@@ -825,26 +722,14 @@ function onTouchMove(e) {
   const dist = Math.hypot(dx, dy);
   if (pinchLastDist != null) {
     const delta = pinchLastDist - dist;
-    applyZoomDelta(delta * ZOOM_PINCH_SPEED);
+    camera.zoomBy(delta * ZOOM_PINCH_SPEED);
   }
-  if (panTouchStart) {
+  if (panTouchLast) {
     const cx = (e.touches[0].clientX + e.touches[1].clientX) * 0.5;
     const cy = (e.touches[0].clientY + e.touches[1].clientY) * 0.5;
-    const dxPan = cx - panTouchStart.x;
-    const dyPan = cy - panTouchStart.y;
-    const panSpeed = 0.0025 * orbit.radius;
-    const targetX = panTouchStart.target[0] - dxPan * panSpeed;
-    const targetY = panTouchStart.target[1] + dyPan * panSpeed;
-    camera.target[0] = targetX;
-    camera.target[1] = targetY;
-    camera.target[2] = panTouchStart.target[2];
-    camera.eye[0] = targetX + (panTouchStart.eye[0] - panTouchStart.target[0]);
-    camera.eye[1] = targetY + (panTouchStart.eye[1] - panTouchStart.target[1]);
-    camera.eye[2] = camera.target[2] + (panTouchStart.eye[2] - panTouchStart.target[2]);
-    panTouchStart.x = cx;
-    panTouchStart.y = cy;
-    panTouchStart.target = camera.target.slice();
-    panTouchStart.eye = camera.eye.slice();
+    camera.panBy(cx - panTouchLast.x, cy - panTouchLast.y);
+    panTouchLast.x = cx;
+    panTouchLast.y = cy;
   }
   pinchLastDist = dist;
   e.preventDefault();
@@ -853,7 +738,7 @@ function onTouchMove(e) {
 function onTouchEnd(e) {
   if (e.touches.length < 2) {
     pinchLastDist = null;
-    panTouchStart = null;
+    panTouchLast = null;
   }
 }
 
@@ -882,7 +767,7 @@ function frame(t) {
   if (cloth && renderer) {
     const size = renderer.getSize ? renderer.getSize() : null;
     if (size) {
-      const ray = screenRay(pointer.x, pointer.y, size.width, size.height);
+      const ray = camera.screenRay(pointer.x, pointer.y, size.width, size.height);
       if (ray) cloth.setPointerRay(ray.o, ray.d, pointer.down && pointer.mode === "grab");
     }
 

@@ -323,12 +323,14 @@
       display: inline;
     }
 
-    .mobile-only {
+    .touch-only {
       display: none;
     }
 
-    .desktop-only {
-      display: inline-flex;
+    @media (hover: none) and (pointer: coarse) {
+      .touch-only {
+        display: inline;
+      }
     }
 
 
@@ -375,7 +377,6 @@
     <header id="toolbar">
       <div class="brand">
         <h1>Cloth Simulation Lab</h1>
-        <span>Unified Renderers</span>
       </div>
       <form id="controls">
         <label>
@@ -446,8 +447,9 @@
       </button>
       <div id="hudContent">
         <strong>Controls</strong>
-        Drag: grab cloth / rotate camera<br />
-        Shift + drag: wind (desktop)<br />
+        Drag: rotate / grab cloth<br />
+        Drag w/ <span class="touch-only">2fingers or </span>Ctrl: pan<br />
+        <span class="touch-only">Pinch or </span>Scroll: zoom<br />
         <span id="windToggleText" style="cursor: pointer;">W: toggle</span>
         <button id="windToggleBtn" type="button">WIND OFF</button>
         <span id="status"></span>
