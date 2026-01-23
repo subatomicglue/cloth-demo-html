@@ -387,6 +387,28 @@ const pointer = {
   mode: "none",
 };
 
+function isPanModifierActive(event) {
+  return !!(event && (event.ctrlKey || event.metaKey));
+}
+
+function releasePointerInteraction() {
+  if (cloth) {
+    cloth.setPointerRay([0, 0, 0], [0, 0, -1], false);
+  }
+  pointer.down = false;
+  pointer.right = false;
+  pointer.mode = "none";
+}
+
+function tryBeginGrab(ray) {
+  if (!cloth || !ray) return false;
+  if (pointer.right || pointer.mode === "pan") return false;
+  if (!cloth.hitTestRay(ray.o, ray.d)) return false;
+  pointer.mode = "grab";
+  pointer.down = true;
+  cloth.setPointerRay(ray.o, ray.d, true);
+  return true;
+}
 
 function isUiEventTarget(target) {
   if (!(target instanceof Element)) return false;
@@ -606,7 +628,7 @@ async function buildRenderer(rebuildCloth = true) {
 
 function onPointerMove(e) {
   preventTouchPointerDefault(e);
-  if (e.pointerType === "touch") return;
+  if (e.pointerType === "touch" && e.isPrimary === false) return;
   if (isUiEventTarget(e.target)) return;
   pointer.x = e.clientX;
   pointer.y = e.clientY;
@@ -639,13 +661,13 @@ function onPointerMove(e) {
 
 function onPointerDown(e) {
   preventTouchPointerDefault(e);
-  if (e.pointerType === "touch") return;
+  if (e.pointerType === "touch" && e.isPrimary === false) return;
   if (isUiEventTarget(e.target)) return;
   pointer.x = e.clientX;
   pointer.y = e.clientY;
   pointer.down = true;
   pointer.shift = e.shiftKey;
-  pointer.right = e.button === 2 || (e.button === 0 && (e.ctrlKey || e.metaKey));
+  pointer.right = e.button === 2 || (e.button === 0 && (e.ctrlKey || e.metaKey)) || isPanModifierActive(e);
   pointer.lx = e.clientX;
   pointer.ly = e.clientY;
   pointer.mode = "none";
@@ -663,11 +685,7 @@ function onPointerDown(e) {
   if (cloth) {
     const size = renderer && renderer.getSize ? renderer.getSize() : null;
     const ray = size ? camera.screenRay(pointer.x, pointer.y, size.width, size.height) : null;
-    if (ray && cloth.hitTestRay(ray.o, ray.d)) {
-      pointer.mode = "grab";
-      cloth.setPointerRay(ray.o, ray.d, true);
-      return;
-    }
+    if (tryBeginGrab(ray)) return;
   }
 
   pointer.mode = "orbit";
@@ -675,11 +693,8 @@ function onPointerDown(e) {
 
 function onPointerUp(e) {
   preventTouchPointerDefault(e);
-  if (e.pointerType === "touch") return;
-  pointer.down = false;
-  pointer.right = false;
-  pointer.mode = "none";
-  if (cloth) cloth.setPointerRay([0, 0, 0], [0, 0, -1], false);
+  if (e.pointerType === "touch" && e.isPrimary === false) return;
+  releasePointerInteraction();
 }
 
 const ZOOM_WHEEL_SPEED = 0.0015;
@@ -696,7 +711,38 @@ let panTouchLast = null;
 
 function onTouchStart(e) {
   if (isUiEventTarget(e.target)) return;
-  if (e.touches.length === 2) {
+  const touchCount = e.touches.length;
+  const panModifier = isPanModifierActive(e);
+
+  if (panModifier && touchCount >= 1) {
+    const touch = e.touches[0];
+    releasePointerInteraction();
+    pointer.down = true;
+    pointer.right = true;
+    pointer.mode = "pan";
+    if (touch) {
+      pointer.x = pointer.lx = touch.clientX;
+      pointer.y = pointer.ly = touch.clientY;
+      panTouchLast = { x: touch.clientX, y: touch.clientY };
+    } else {
+      panTouchLast = null;
+    }
+    pinchLastDist = null;
+    e.preventDefault();
+    return;
+  }
+
+  if (touchCount === 1 && cloth) {
+    const touch = e.touches[0];
+    pointer.x = pointer.lx = touch.clientX;
+    pointer.y = pointer.ly = touch.clientY;
+    const size = renderer && renderer.getSize ? renderer.getSize() : null;
+    const ray = size ? camera.screenRay(touch.clientX, touch.clientY, size.width, size.height) : null;
+    tryBeginGrab(ray);
+  } else if (touchCount >= 2) {
+    if (pointer.mode === "grab") {
+      releasePointerInteraction();
+    }
     const dx = e.touches[0].clientX - e.touches[1].clientX;
     const dy = e.touches[0].clientY - e.touches[1].clientY;
     pinchLastDist = Math.hypot(dx, dy);
@@ -708,14 +754,34 @@ function onTouchStart(e) {
     pinchLastDist = null;
     panTouchLast = null;
   }
-  if (e.touches.length >= 1) {
+  if (touchCount >= 1) {
     e.preventDefault();
   }
 }
 
 function onTouchMove(e) {
   if (isUiEventTarget(e.target)) return;
+  if (isPanModifierActive(e) && pointer.mode === "pan" && e.touches.length >= 1) {
+    const touch = e.touches[0];
+    if (touch) {
+      const dx = touch.clientX - pointer.lx;
+      const dy = touch.clientY - pointer.ly;
+      camera.panBy(dx, dy);
+      pointer.x = pointer.lx = touch.clientX;
+      pointer.y = pointer.ly = touch.clientY;
+    }
+    e.preventDefault();
+    return;
+  }
   if (e.touches.length === 1) {
+    if (pointer.mode === "grab" && cloth) {
+      const touch = e.touches[0];
+      pointer.x = pointer.lx = touch.clientX;
+      pointer.y = pointer.ly = touch.clientY;
+      const size = renderer && renderer.getSize ? renderer.getSize() : null;
+      const ray = size ? camera.screenRay(touch.clientX, touch.clientY, size.width, size.height) : null;
+      if (ray) cloth.setPointerRay(ray.o, ray.d, true);
+    }
     e.preventDefault();
     return;
   }
@@ -742,6 +808,9 @@ function onTouchEnd(e) {
   if (e.touches.length < 2) {
     pinchLastDist = null;
     panTouchLast = null;
+  }
+  if (e.touches.length === 0) {
+    releasePointerInteraction();
   }
 }
 
