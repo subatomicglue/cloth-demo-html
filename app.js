@@ -96,15 +96,14 @@ function getActiveBackgroundColor() {
   return rendererFactories[activeRendererType].getBackgroundColor();
 }
 
+// set the minimized ControlWidget "status text" color based on background inversion.
 function updateControlsWidgetColors(bg) {
   const hudMinimized = document.body.classList.contains("hud-hidden");
-  const codeLink = document.getElementById("codeLink");
 
   // Controls Widget is maximized: restore the status text color.
   if (!hudMinimized) {
     if (hudToggleIcon) hudToggleIcon.style.color = "#fff";
     if (hudToggleStatus) hudToggleStatus.style.color = "#fbd3a4";
-    if (codeLink) codeLink.style.color = "#0e0c0a";
     return;
   }
 
@@ -113,7 +112,15 @@ function updateControlsWidgetColors(bg) {
   const cssColor = rgbToCss(inverted);
   if (hudToggleIcon && cssColor) hudToggleIcon.style.color = cssColor;
   if (hudToggleStatus && cssColor) hudToggleStatus.style.color = cssColor;
-  if (codeLink && cssColor) codeLink.style.color = cssColor;
+}
+
+// set the github link color based on background inversion.
+function updateGithubLinkColor(bg) {
+  const codeLink = document.getElementById("codeLink");
+  if (!codeLink) return;
+  const inverted = invertRgb(bg);
+  const cssColor = rgbToCss(inverted);
+  if (cssColor) codeLink.style.color = cssColor;
 }
 
 let cloth = null;
@@ -600,7 +607,8 @@ async function buildRenderer(rebuildCloth = true) {
   if (renderer && renderer.resize) renderer.resize();
   updateStatus(currentParams || params);
   updateWindToggle();
-  updateControlsWidgetColors(getActiveBackgroundColor());
+  updateControlsWidgetColors( getActiveBackgroundColor() );
+  updateGithubLinkColor( getActiveBackgroundColor() );
 }
 
 function normalize(v) {
