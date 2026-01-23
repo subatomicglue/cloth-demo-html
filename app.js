@@ -1,3 +1,4 @@
+import { setGlobalErrorHandler } from "./error_handler.js"; // first thing to import
 import { Cloth } from "./cloth.js";
 import { createRenderer as createCanvas2D } from "./renderer_canvas2d.js";
 import { createRenderer as createWebGL } from "./renderer_webgl.js";
@@ -5,37 +6,31 @@ import { createRenderer as createThree } from "./renderer_threejs.js";
 import { LookAtCamera } from "./camera.js";
 import { createToastManager } from "./toast_notification.js";
 
-const pendingGlobalErrors = [];
-let showGlobalError = (message) => {
-  pendingGlobalErrors.push(message);
-  // eslint-disable-next-line no-console
-  console.error(message);
+// constants
+// search for PRESET_DEFINITIONS to edit presets
+// search for PIN_EDGE_MODES to edit pinning modes
+const INITIAL_POSITION_JITTER = 0.08; // fraction of spacing used to randomize initial cloth pose
+const TOAST_COLORS = {
+  info: "#7dd3fc",
+  success: "#34d399",
+  warning: "#fbbf24",
+  danger: "#f87171",
 };
 
-function formatErrorMessage(prefix, value) {
-  if (!value) return prefix;
-  if (typeof value === "string") return `${prefix}: ${value}`;
-  if (value && value.message) return `${prefix}: ${value.message}`;
-  try {
-    return `${prefix}: ${JSON.stringify(value)}`;
-  } catch {
-    return `${prefix}: ${String(value)}`;
-  }
-}
-
-
+// grab DOM elements
 const container = document.getElementById("viewport");
+const presetSelect = document.getElementById("presetSelect");
 const rendererSelect = document.getElementById("rendererSelect");
-const toolbarToggle = document.getElementById("toolbarToggle");
-const toolbar = document.getElementById("toolbar");
+const settingsToggle = document.getElementById("settingsToggle");
+const settingsWidget = document.getElementById("settingsWidget");
 const windToggleBtn = document.getElementById("windToggleBtn");
 const windToggleText = document.getElementById("windToggleText");
-const hud = document.getElementById("hud");
-const hudToggle = document.getElementById("hudToggle");
-const hudToggleIcon = document.getElementById("hudToggleIcon");
-const hudToggleLabel = document.getElementById("hudToggleLabel");
-const hudToggleStatus = document.getElementById("hudToggleStatus");
-const controlsForm = document.getElementById("controls");
+const infoWidget = document.getElementById("infoWidget");
+const infoToggle = document.getElementById("infoToggle");
+const infoToggleIcon = document.getElementById("infoToggleIcon");
+const infoToggleLabel = document.getElementById("infoToggleLabel");
+const infoToggleStatus = document.getElementById("infoToggleStatus");
+const settingsForm = document.getElementById("settingsForm");
 const nxInput = document.getElementById("nx");
 const nyInput = document.getElementById("ny");
 const clothSizeInput = document.getElementById("clothSize");
@@ -49,34 +44,198 @@ const maxAccumulatedInput = document.getElementById("maxAccumulated");
 const useShearInput = document.getElementById("useShear");
 const applyBtn = document.getElementById("applyBtn");
 const resetSimBtn = document.getElementById("resetSimBtn");
-const resetDefaultsBtn = document.getElementById("resetDefaultsBtn");
 const status = document.getElementById("status");
+
+// create the toast notification system.
 const toastManager = createToastManager();
-const TOAST_COLORS = {
-  info: "#7dd3fc",
-  success: "#34d399",
-  warning: "#fbbf24",
-  danger: "#f87171",
-};
 const notify = (message, options = {}) => {
   const type = options.type == null ? "info" : options.type;
   const fallbackColor = TOAST_COLORS[type] || TOAST_COLORS.info;
   const color = options.color == null ? fallbackColor : options.color;
   toastManager.notify(message, { ...options, type, color });
 };
-showGlobalError = (message) => {
-  notify(message, { type: "danger" });
-};
-while (pendingGlobalErrors.length) {
-  const buffered = pendingGlobalErrors.shift();
-  showGlobalError(buffered);
-}
+setGlobalErrorHandler((message) => notify(message, { type: "danger" }) ); // teach global error handler to notify
+
 
 const rendererFactories = {
   three: createThree,
   canvas2d: createCanvas2D,
   webgl: createWebGL,
 };
+const DEFAULT_PIN_MODE_ID = "top";
+const PIN_EDGE_MODES = [
+  {
+    id: "top",
+    label: "Top",
+    vertical: false,
+    setup: (cloth) => cloth.pinRow(0),
+  },
+  {
+    id: "bottom",
+    label: "Bottom",
+    vertical: false,
+    setup: (cloth) => {
+      const lastRow = Math.max(0, cloth.getRowCount() - 1);
+      cloth.pinRow(lastRow);
+    },
+  },
+  {
+    id: "left",
+    label: "Left",
+    vertical: false,
+    setup: (cloth) => cloth.pinColumn(0),
+  },
+  {
+    id: "right",
+    label: "Right",
+    vertical: false,
+    setup: (cloth) => {
+      const lastColumn = Math.max(0, cloth.getColumnCount() - 1);
+      cloth.pinColumn(lastColumn);
+    },
+  },
+  {
+    id: "left-right",
+    label: "Left + Right",
+    vertical: false,
+    setup: (cloth) => {
+      const lastColumn = Math.max(0, cloth.getColumnCount() - 1);
+      const offset = cloth.getExtentX() * 0.05;
+      cloth.pinColumn(0, { offset: [offset, 0, 0] });
+      cloth.pinColumn(lastColumn, { offset: [-offset, 0, 0] });
+    },
+  },
+  {
+    id: "left-right-loose",
+    label: "Left + Right (Loose)",
+    vertical: false,
+    setup: (cloth) => {
+      const lastColumn = Math.max(0, cloth.getColumnCount() - 1);
+      const offset = cloth.getExtentX() * 0.15;
+      cloth.pinColumn(0, { offset: [offset, 0, 0] });
+      cloth.pinColumn(lastColumn, { offset: [-offset, 0, 0] });
+    },
+  },
+  {
+    id: "flagpole-left",
+    label: "Flagpole Left",
+    vertical: true,
+    setup: (cloth) => cloth.pinColumn(0),
+  },
+  {
+    id: "flagpole-right",
+    label: "Flagpole Right",
+    vertical: true,
+    setup: (cloth) => {
+      const lastColumn = Math.max(0, cloth.getColumnCount() - 1);
+      cloth.pinColumn(lastColumn);
+    },
+  },
+  {
+    id: "flagpole-left-right",
+    label: "Flagpoles (Tight)",
+    vertical: true,
+    setup: (cloth) => {
+      const lastColumn = Math.max(0, cloth.getColumnCount() - 1);
+      const offset = cloth.getExtentX() * 0.02;
+      cloth.pinColumn(0, { offset: [offset, 0, 0] });
+      cloth.pinColumn(lastColumn, { offset: [-offset, 0, 0] });
+    },
+  },
+  {
+    id: "flagpole-left-right-loose",
+    label: "Flagpoles (Loose)",
+    vertical: true,
+    setup: (cloth) => {
+      const lastColumn = Math.max(0, cloth.getColumnCount() - 1);
+      const offset = cloth.getExtentX() * 0.15;
+      cloth.pinColumn(0, { offset: [offset, 0, 0] });
+      cloth.pinColumn(lastColumn, { offset: [-offset, 0, 0] });
+    },
+  },
+];
+const PIN_EDGE_LOOKUP = new Map(PIN_EDGE_MODES.map((mode) => [mode.id, mode]));
+
+function getPinModeConfig(id) {
+  return PIN_EDGE_LOOKUP.get(id) || PIN_EDGE_LOOKUP.get(DEFAULT_PIN_MODE_ID);
+}
+
+function applyPinConfiguration(clothInstance, pinMode) {
+  if (!clothInstance) return;
+  if (pinMode && typeof pinMode.setup === "function") {
+    pinMode.setup(clothInstance);
+  } else {
+    clothInstance.pinRow(0);
+  }
+}
+
+// populate the Preset dropdown in the GUI
+function populatePresetSelect() {
+  if (!presetSelect) return;
+  presetSelect.innerHTML = "";
+  const customOption = document.createElement("option");
+  customOption.value = "";
+  customOption.textContent = "Custom";
+  presetSelect.appendChild(customOption);
+  PRESETS.forEach((preset) => {
+    const option = document.createElement("option");
+    option.value = preset.id;
+    option.textContent = preset.label;
+    option.dataset.query = preset.query || "";
+    presetSelect.appendChild(option);
+  });
+  presetSelect.value = "";
+}
+
+function resetControlsFromDefaults(presetValue = "") {
+  resetDefaults({ rebuild: false, persist: false, presetValue });
+  snapshotAllControls();
+}
+
+// when a Preset dropdown changes, it's data comes through here.
+// Applies the preset's query parameters to the controls and rebuilds the simulation.
+function applyPresetQuery(query, { preserveRenderer = true, presetId = null } = {}) {
+  resetControlsFromDefaults(presetId || "");
+  if (presetSelect && presetId != null) {
+    presetSelect.value = presetId;
+  }
+
+  const base = `${window.location.origin}${window.location.pathname}`;
+  const target = new URL(query || "", base);
+  if (preserveRenderer && rendererSelect) {
+    const currentRenderer = rendererSelect.value || activeRendererType;
+    if (currentRenderer) target.searchParams.set("renderer", currentRenderer);
+  }
+
+  const params = target.searchParams;
+  CONTROL_BINDINGS.forEach(({ key, element, type }) => {
+    if (type === "flag" && key === "windEnabled") {
+      const value = params.get(key);
+      if (value != null) {
+        setWindEnabledState(parseFlag(value, true));
+      }
+      return;
+    }
+    if (!element) return;
+    const value = params.get(key);
+    if (value != null) {
+      setControlValue(element, value);
+    }
+  });
+
+  const collapsedValue = params.get("settingsCollapsed") ?? params.get("toolbarCollapsed");
+  if (collapsedValue != null) {
+    setSettingsCollapsed(parseFlag(collapsedValue));
+  }
+  const infoValue = params.get("infoCollapsed") ?? params.get("hudHidden");
+  if (infoValue != null) {
+    setInfoCollapsed(parseFlag(infoValue));
+  }
+
+  snapshotAllControls();
+  persistControlState();
+  buildRenderer(true).catch(() => {});
+}
 
 function invertRgb(rgb) {
   if (!rgb) return null;
@@ -98,21 +257,21 @@ function getActiveBackgroundColor() {
 }
 
 // set the minimized ControlWidget "status text" color based on background inversion.
-function updateControlsWidgetColors(bg) {
-  const hudMinimized = document.body.classList.contains("hud-hidden");
+function updateInfoWidgetColors(bg) {
+  const infoMinimized = document.body.classList.contains("info-collapsed");
 
-  // Controls Widget is maximized: restore the status text color.
-  if (!hudMinimized) {
-    if (hudToggleIcon) hudToggleIcon.style.color = "#fff";
-    if (hudToggleStatus) hudToggleStatus.style.color = "#fbd3a4";
+  // Info widget is maximized: restore the status text color.
+  if (!infoMinimized) {
+    if (infoToggleIcon) infoToggleIcon.style.color = "#fff";
+    if (infoToggleStatus) infoToggleStatus.style.color = "#fbd3a4";
     return;
   }
 
-  // Controls Widget is minimized: invert the status text color relative to the renderer's background for visibility.
+  // Info widget is minimized: invert the status text color relative to the renderer's background for visibility.
   const inverted = invertRgb(bg);
   const cssColor = rgbToCss(inverted);
-  if (hudToggleIcon && cssColor) hudToggleIcon.style.color = cssColor;
-  if (hudToggleStatus && cssColor) hudToggleStatus.style.color = cssColor;
+  if (infoToggleIcon && cssColor) infoToggleIcon.style.color = cssColor;
+  if (infoToggleStatus && cssColor) infoToggleStatus.style.color = cssColor;
 }
 
 // set the github link color based on background inversion.
@@ -132,6 +291,31 @@ let buildToken = 0;
 let currentParams = null;
 let fpsSmooth = 0;
 let desiredWindEnabled = true;
+
+const PRESET_DEFINITIONS = {
+  "Tapestry": "?renderer=three&nx=16&ny=16&clothSize=5&constraintIters=6&gravityMag=9.8&windVec=%5B-20%2C0%2C0%5D&windVariation=1&pinEdge=top&maxSubstep=0.008&maxAccumulated=0.25&useShear=1&windEnabled=1&settingsCollapsed=0&infoCollapsed=0",
+  "Waving Flag": "?renderer=three&nx=40&ny=20&clothSize=5&constraintIters=4&gravityMag=9.8&windVec=%5B20%2C0%2C1%5D&windVariation=0.8&pinEdge=flagpole-left&maxSubstep=0.008&maxAccumulated=0.25&useShear=1&windEnabled=1&settingsCollapsed=0&infoCollapsed=0",
+  "Banner (Bar)": "?renderer=three&nx=40&ny=15&clothSize=5&constraintIters=6&gravityMag=9.8&windVec=%5B20%2C0%2C1%5D&windVariation=0.8&pinEdge=top&maxSubstep=0.008&maxAccumulated=0.25&useShear=1&windEnabled=1&settingsCollapsed=0&infoCollapsed=0",
+  "Banner (Poles)": "?nx=30&ny=15&clothSize=5&constraintIters=6&gravityMag=9.8&windVec=%5B0%2C0%2C-5%5D&windVariation=1&pinEdge=flagpole-left-right&maxSubstep=0.008&maxAccumulated=0.25&useShear=1&windEnabled=1&toolbarCollapsed=0&hudHidden=0&renderer=three&settingsCollapsed=0&infoCollapsed=0",
+  "Hammock": "?nx=40&ny=20&clothSize=5&constraintIters=6&gravityMag=9.8&windVec=%5B5%2C0%2C10%5D&windVariation=0.8&pinEdge=left-right&maxSubstep=0.008&maxAccumulated=0.25&useShear=1&windEnabled=1&toolbarCollapsed=0&hudHidden=0&renderer=three&settingsCollapsed=0&infoCollapsed=0",
+  "Sail": "?nx=40&ny=20&clothSize=5&constraintIters=6&gravityMag=9.8&windVec=%5B0%2C10%2C20%5D&windVariation=0.8&pinEdge=flagpole-left-right-loose&maxSubstep=0.008&maxAccumulated=0.25&useShear=1&windEnabled=1&toolbarCollapsed=0&hudHidden=0&renderer=three&settingsCollapsed=0&infoCollapsed=0",
+};
+
+function slugifyPresetLabel(label) {
+  return label
+    .toLowerCase()
+    .replace(/[^a-z0-9]+/gi, "-")
+    .replace(/^-+|-+$/g, "")
+    .replace(/-{2,}/g, "-");
+}
+
+const PRESETS = Object.entries(PRESET_DEFINITIONS).map(([label, query]) => ({
+  id: slugifyPresetLabel(label) || "preset",
+  label,
+  query: query || "",
+}));
+
+const PRESET_LOOKUP = new Map(PRESETS.map((preset) => [preset.id, preset]));
 
 const CONTROL_BINDINGS = [
   { key: "renderer", element: rendererSelect },
@@ -202,6 +386,27 @@ function bindAutoApply(el, eventName) {
   });
 }
 
+function validateWindVariationInput(showMessage = false) {
+  if (!windVariationInput) return;
+  const text = windVariationInput.value;
+  if (text == null || text === "") {
+    windVariationInput.setCustomValidity("");
+    if (showMessage) windVariationInput.reportValidity();
+    return;
+  }
+  const value = Number(text);
+  if (!Number.isFinite(value)) {
+    windVariationInput.setCustomValidity("Enter a number between 0 and 1.");
+  } else if (value < 0 || value > 1) {
+    windVariationInput.setCustomValidity("Wind variation must stay between 0 and 1.");
+  } else {
+    windVariationInput.setCustomValidity("");
+  }
+  if (showMessage) {
+    windVariationInput.reportValidity();
+  }
+}
+
 function serializeControls() {
   const out = {};
   CONTROL_BINDINGS.forEach(({ key, element, type }) => {
@@ -214,12 +419,13 @@ function serializeControls() {
     }
     if (value != null) out[key] = value;
   });
-  out.toolbarCollapsed = document.body.classList.contains("toolbar-collapsed") ? "1" : "0";
-  out.hudHidden = document.body.classList.contains("hud-hidden") ? "1" : "0";
+  out.settingsCollapsed = document.body.classList.contains("settings-collapsed") ? "1" : "0";
+  out.infoCollapsed = document.body.classList.contains("info-collapsed") ? "1" : "0";
   return out;
 }
 
-function updateUrlParams(record) {
+function updateUrlParams(record, options = {}) {
+  const { replace = true } = options;
   const url = new URL(window.location.href);
   Object.entries(record).forEach(([key, value]) => {
     if (value == null || value === "") {
@@ -228,7 +434,11 @@ function updateUrlParams(record) {
       url.searchParams.set(key, value);
     }
   });
-  window.history.replaceState(null, "", url);
+  if (replace) {
+    window.history.replaceState(null, "", url);
+  } else {
+    window.location.href = url.toString();
+  }
 }
 
 function saveToStorage(record) {
@@ -250,7 +460,7 @@ function loadFromStorage() {
 
 function persistControlState() {
   const record = serializeControls();
-  updateUrlParams(record);
+  updateUrlParams(record, { replace: true });
   saveToStorage(record);
 }
 
@@ -286,26 +496,36 @@ function loadPersistedControls() {
     if (value != null) setControlValue(element, value);
   });
 
-  // restore the "Controls" widget toolbar.
-  const toolbarParam = params.get("toolbarCollapsed");
-  if (toolbarParam != null) {
-    setToolbarCollapsed(parseFlag(toolbarParam));
-  } else if (stored && Object.prototype.hasOwnProperty.call(stored, "toolbarCollapsed")) {
-    setToolbarCollapsed(parseFlag(stored.toolbarCollapsed));
+  // restore the Settings widget.
+  const settingsParam = params.get("settingsCollapsed");
+  const legacyToolbarParam = settingsParam == null ? params.get("toolbarCollapsed") : null;
+  if (settingsParam != null || legacyToolbarParam != null) {
+    const value = settingsParam != null ? settingsParam : legacyToolbarParam;
+    setSettingsCollapsed(parseFlag(value));
+  } else if (stored && (Object.prototype.hasOwnProperty.call(stored, "settingsCollapsed") || Object.prototype.hasOwnProperty.call(stored, "toolbarCollapsed"))) {
+    const storedValue = Object.prototype.hasOwnProperty.call(stored, "settingsCollapsed")
+      ? stored.settingsCollapsed
+      : stored.toolbarCollapsed;
+    setSettingsCollapsed(parseFlag(storedValue));
     usedStored = true;
   } else {
-    setToolbarCollapsed(document.body.classList.contains("toolbar-collapsed"));
+    setSettingsCollapsed(document.body.classList.contains("settings-collapsed"));
   }
 
-  // restore the HUD for "Cloth Simulation Lab" settings.
-  const hudParam = params.get("hudHidden");
-  if (hudParam != null) {
-    setHudHidden(parseFlag(hudParam));
-  } else if (stored && Object.prototype.hasOwnProperty.call(stored, "hudHidden")) {
-    setHudHidden(parseFlag(stored.hudHidden));
+  // restore the Info widget.
+  const infoParam = params.get("infoCollapsed");
+  const legacyHudParam = infoParam == null ? params.get("hudHidden") : null;
+  if (infoParam != null || legacyHudParam != null) {
+    const value = infoParam != null ? infoParam : legacyHudParam;
+    setInfoCollapsed(parseFlag(value));
+  } else if (stored && (Object.prototype.hasOwnProperty.call(stored, "infoCollapsed") || Object.prototype.hasOwnProperty.call(stored, "hudHidden"))) {
+    const storedValue = Object.prototype.hasOwnProperty.call(stored, "infoCollapsed")
+      ? stored.infoCollapsed
+      : stored.hudHidden;
+    setInfoCollapsed(parseFlag(storedValue));
     usedStored = true;
   } else {
-    setHudHidden(document.body.classList.contains("hud-hidden"));
+    setInfoCollapsed(document.body.classList.contains("info-collapsed"));
   }
 
   if (usedStored) {
@@ -316,6 +536,8 @@ function loadPersistedControls() {
 }
 
 populateRendererSelect();
+populatePinEdgeSelect();
+populatePresetSelect();
 loadPersistedControls();
 if (rendererSelect && rendererSelect.value) {
   activeRendererType = rendererSelect.value;
@@ -353,6 +575,23 @@ function populateRendererSelect() {
     : firstValue;
   if (resolved) {
     rendererSelect.value = resolved;
+  }
+}
+
+function populatePinEdgeSelect() {
+  if (!pinEdgeSelect) return;
+  const desiredValue = pinEdgeSelect.value || pinEdgeSelect.getAttribute("data-default") || DEFAULT_PIN_MODE_ID;
+  pinEdgeSelect.innerHTML = "";
+  PIN_EDGE_MODES.forEach((mode) => {
+    const option = document.createElement("option");
+    option.value = mode.id;
+    option.textContent = mode.label;
+    pinEdgeSelect.appendChild(option);
+  });
+  const hasDesired = PIN_EDGE_LOOKUP.has(desiredValue);
+  const finalValue = hasDesired ? desiredValue : DEFAULT_PIN_MODE_ID;
+  if (finalValue) {
+    pinEdgeSelect.value = finalValue;
   }
 }
 
@@ -412,7 +651,7 @@ function tryBeginGrab(ray) {
 
 function isUiEventTarget(target) {
   if (!(target instanceof Element)) return false;
-  return !!target.closest("#toolbar, #hud, #toolbarToggle, #hudToggle, #codeLink, #toast-notification-container");
+  return !!target.closest("#settingsWidget, #infoWidget, #settingsToggle, #infoToggle, #codeLink, #toast-notification-container");
 }
 
 function preventTouchPointerDefault(event) {
@@ -461,15 +700,24 @@ function readParams() {
   const extentZ = spacing * (ny - 1);
   const gravityMag = Math.max(0, readNumber(gravityInput, 9.8));
   const wind = parseVectorInput(windInput.value);
-  const windVariation = readNumber(windVariationInput, 0.5);
+  const windVariation = Math.max(0, Math.min(1, readNumber(windVariationInput, 0.5)));
+  const pinEdge = pinEdgeSelect.value;
+  const pinMode = getPinModeConfig(pinEdge);
+  const isVertical = !!(pinMode && pinMode.vertical);
+  const orientation = isVertical ? "vertical" : "horizontal";
+  const originY = isVertical ? (ny - 1) * spacing * 0.5 : 0.7;
 
   return {
     nx,
     ny,
     size,
     spacing,
-    origin: [-extentX / 2, 0.7, -extentZ / 2],
-    pinEdge: pinEdgeSelect.value,
+    pinMode,
+    orientation,
+    initialJitter: INITIAL_POSITION_JITTER,
+    autoPinTopEdge: false,
+    origin: [-extentX / 2, originY, -extentZ / 2],
+    pinEdge,
     constraintIters: Math.max(1, Math.floor(readNumber(constraintInput, 6))),
     useShear: useShearInput.checked,
     gravity: [0, -gravityMag, 0],
@@ -488,24 +736,24 @@ function updateStatus(params) {
   const fpsDisplay = Math.max(0, Math.min(999, Math.round(fpsSmooth)));
   const text = `${rendererLabel} | ${sizeText} | ${fpsDisplay}FPS`;
   status.textContent = text;
-  if (hudToggleStatus) hudToggleStatus.textContent = text;
-  updateControlsWidgetColors(getActiveBackgroundColor());
+  if (infoToggleStatus) infoToggleStatus.textContent = text;
+  updateInfoWidgetColors(getActiveBackgroundColor());
 }
 
-function setToolbarCollapsed(collapsed) {
-  if (!toolbarToggle) return;
-  document.body.classList.toggle("toolbar-collapsed", collapsed);
-  toolbarToggle.setAttribute("aria-expanded", collapsed ? "false" : "true");
-  toolbarToggle.textContent = collapsed ? "Menu" : "Hide";
+function setSettingsCollapsed(collapsed) {
+  if (!settingsToggle) return;
+  document.body.classList.toggle("settings-collapsed", collapsed);
+  settingsToggle.setAttribute("aria-expanded", collapsed ? "false" : "true");
+  settingsToggle.textContent = collapsed ? "Menu" : "Hide";
 }
 
-function setHudHidden(hidden) {
-  if (!hud || !hudToggle) return;
-  document.body.classList.toggle("hud-hidden", hidden);
-  if (hudToggleIcon) hudToggleIcon.textContent = hidden ? '+' : '−';
-  if (hudToggleLabel) hudToggleLabel.textContent = hidden ? 'Info' : 'Hide';
-  hudToggle.setAttribute("aria-expanded", hidden ? "false" : "true");
-  updateControlsWidgetColors(getActiveBackgroundColor());
+function setInfoCollapsed(collapsed) {
+  if (!infoWidget || !infoToggle) return;
+  document.body.classList.toggle("info-collapsed", collapsed);
+  if (infoToggleIcon) infoToggleIcon.textContent = collapsed ? '+' : '−';
+  if (infoToggleLabel) infoToggleLabel.textContent = collapsed ? 'Info' : 'Hide';
+  infoToggle.setAttribute("aria-expanded", collapsed ? "false" : "true");
+  updateInfoWidgetColors(getActiveBackgroundColor());
 }
 
 function updateWindToggle() {
@@ -532,11 +780,24 @@ function resetSimulation() {
   notify("Cloth reset.", { type: "success" });
 }
 
-function resetDefaults() {
-  if (controlsForm) controlsForm.reset();
+function resetDefaults(options = {}) {
+  const {
+    rebuild = true,
+    persist = true,
+    presetValue = "",
+    setPreset = true,
+  } = options;
+  if (settingsForm) settingsForm.reset();
   snapshotAllControls();
-  persistControlState();
-  buildRenderer(true);
+  if (persist) {
+    persistControlState();
+  }
+  if (rebuild) {
+    buildRenderer(true);
+  }
+  if (setPreset && presetSelect) {
+    presetSelect.value = presetValue || "";
+  }
 }
 
 function needsRebuild(nextParams, prevParams) {
@@ -566,6 +827,9 @@ function applyParamsWithoutRebuild(nextParams) {
 }
 
 function applyChanges() {
+  if (presetSelect && presetSelect.value !== "") {
+    presetSelect.value = "";
+  }
   const params = readParams();
   if (needsRebuild(params, currentParams)) {
     buildRenderer(true);
@@ -589,6 +853,7 @@ async function buildRenderer(rebuildCloth = true) {
     camera.reframeForExtent(maxExtent);
 
     cloth = new Cloth(params);
+    applyPinConfiguration(cloth, params.pinMode);
     cloth.setWind(params.wind);
     updateWindText();
     currentBaseWind = params.wind.slice();
@@ -621,7 +886,7 @@ async function buildRenderer(rebuildCloth = true) {
   if (renderer && renderer.resize) renderer.resize();
   updateStatus(currentParams || params);
   updateWindToggle();
-  updateControlsWidgetColors( getActiveBackgroundColor() );
+  updateInfoWidgetColors( getActiveBackgroundColor() );
   updateGithubLinkColor( getActiveBackgroundColor() );
 }
 
@@ -862,14 +1127,14 @@ function frame(t) {
 
     // Apply wind variation
   if (currentParams && currentParams.windVariation > 0) {
-      // Randomly update target with small probability per frame
-      if (Math.random() < 0.02) {
+    // Randomly update target with small probability per frame
+    if (Math.random() < 0.02) {
         const variation = currentParams.windVariation;
         targetWindFactor = (1 - variation) + variation * Math.random();
-      }
-      // Smoothly interpolate to target
-      currentWindFactor += (targetWindFactor - currentWindFactor) * 0.02;
-      cloth.wind[0] = currentBaseWind[0] * currentWindFactor;
+    }
+    // Smoothly interpolate to target
+    currentWindFactor += (targetWindFactor - currentWindFactor) * 0.02;
+    cloth.wind[0] = currentBaseWind[0] * currentWindFactor;
       cloth.wind[1] = currentBaseWind[1] * currentWindFactor;
       cloth.wind[2] = currentBaseWind[2] * currentWindFactor;
     } else {
@@ -886,6 +1151,17 @@ function frame(t) {
   requestAnimationFrame(frame);
 }
 
+// Settings UI:  setup the listener for the Preset dropdown
+if (presetSelect) {
+  presetSelect.addEventListener("change", () => {
+    const selectedId = presetSelect.value;
+    const preset = PRESET_LOOKUP.get(selectedId);
+    if (!preset || !preset.query) return;
+    applyPresetQuery(preset.query, { preserveRenderer: true, presetId: selectedId });
+  });
+}
+
+// Settings UI:  setup the listener for the Renderer dropdown
 if (rendererSelect) {
   rendererSelect.addEventListener("change", () => {
     persistControlState();
@@ -894,26 +1170,33 @@ if (rendererSelect) {
       .catch(() => {});
   });
 }
-if (controlsForm) {
-  controlsForm.addEventListener("submit", (event) => {
+
+// Settings UI:  setup the listener for the Controls Form, Submit/Reset buttons
+if (settingsForm) {
+  settingsForm.addEventListener("submit", (event) => {
     event.preventDefault();
     applyChanges();
   });
-  controlsForm.addEventListener("reset", () => {
+  settingsForm.addEventListener("reset", () => {
     window.requestAnimationFrame(() => {
       snapshotAllControls();
       persistControlState();
     });
   });
 }
+
+// Settings UI:  setup the listener for the Reset Simulation button
 resetSimBtn.addEventListener("click", resetSimulation);
-resetDefaultsBtn.addEventListener("click", resetDefaults);
 
 // Auto-apply for form controls
 bindAutoApply(pinEdgeSelect, "change");
 bindAutoApply(useShearInput, "change");
 const autoApplyInputs = [nxInput, nyInput, clothSizeInput, constraintInput, gravityInput, windInput, windVariationInput, maxSubstepInput, maxAccumulatedInput];
-autoApplyInputs.forEach(input => bindAutoApply(input, "blur"));
+autoApplyInputs.forEach((input) => bindAutoApply(input, "blur"));
+if (windVariationInput) {
+  windVariationInput.addEventListener("input", () => validateWindVariationInput(false));
+  windVariationInput.addEventListener("blur", () => validateWindVariationInput(true));
+}
 
 // Hide apply button since changes auto-apply
 applyBtn.style.display = "none";
@@ -937,24 +1220,24 @@ function stopUiWheel(event) {
   event.stopPropagation();
 }
 
-[toolbar, controlsForm, toolbarToggle, hud, hudToggle].forEach((el) => {
+[settingsWidget, settingsForm, settingsToggle, infoWidget, infoToggle].forEach((el) => {
   if (!el) return;
   el.addEventListener("pointerdown", stopUiPointer);
   el.addEventListener("wheel", stopUiWheel, { passive: false });
 });
 
-if (toolbarToggle) {
-  toolbarToggle.addEventListener("click", () => {
-    const nextCollapsed = !document.body.classList.contains("toolbar-collapsed");
-    setToolbarCollapsed(nextCollapsed);
+if (settingsToggle) {
+  settingsToggle.addEventListener("click", () => {
+    const nextCollapsed = !document.body.classList.contains("settings-collapsed");
+    setSettingsCollapsed(nextCollapsed);
     persistControlState();
   });
 }
 
-if (hudToggle) {
-  hudToggle.addEventListener("click", () => {
-    const nextHidden = !document.body.classList.contains("hud-hidden");
-    setHudHidden(nextHidden);
+if (infoToggle) {
+  infoToggle.addEventListener("click", () => {
+    const nextHidden = !document.body.classList.contains("info-collapsed");
+    setInfoCollapsed(nextHidden);
     persistControlState();
   });
 }

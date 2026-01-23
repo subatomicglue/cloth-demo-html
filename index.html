@@ -3,7 +3,7 @@
 <head>
   <meta charset="utf-8" />
   <title>Cloth Simulation</title>
-  <meta name="viewport" content="width=device-width, initial-scale=1" />
+  <meta name="viewport" content="width=device-width, initial-scale=1, maximum-scale=1, user-scalable=no, viewport-fit=cover" />
   <meta name="description" content="Interactive cloth simulation playground with multiple renderers, physics controls, and touch support." />
   <meta property="og:type" content="website" />
   <meta property="og:title" content="Cloth Simulation" />
@@ -57,7 +57,7 @@
       touch-action: none;
     }
 
-    #toolbar {
+    #settingsWidget {
       position: fixed;
       top: 18px;
       left: 18px;
@@ -95,14 +95,14 @@
       color: #5b4a3c;
     }
 
-    #controls {
+    #settingsForm {
       display: grid;
       grid-template-columns: repeat(auto-fit, minmax(160px, 1fr));
       gap: 10px;
       align-items: end;
     }
 
-    #controls label {
+    #settingsForm label {
       display: grid;
       gap: 6px;
       font-size: 11px;
@@ -111,10 +111,10 @@
       color: #5b4a3c;
     }
 
-    #controls input,
-    #controls select,
-    #controls button {
-      font: 14px/1 var(--ui);
+    #settingsForm input,
+    #settingsForm select,
+    #settingsForm button {
+      font: 16px/1 var(--ui);
       padding: 8px 10px;
       border-radius: 10px;
       border: 1px solid var(--panel-border);
@@ -122,19 +122,19 @@
       color: var(--ink);
     }
 
-    #controls input[type="checkbox"] {
+    #settingsForm input[type="checkbox"] {
       width: 18px;
       height: 18px;
       accent-color: var(--accent);
     }
 
-    #controls .inline {
+    #settingsForm .inline {
       display: flex;
       gap: 8px;
       align-items: center;
     }
 
-    #controls button {
+    #settingsForm button {
       background: var(--accent);
       color: #fff;
       border: none;
@@ -143,7 +143,7 @@
       transition: transform 0.15s ease, box-shadow 0.2s ease;
     }
 
-    #controls button:hover {
+    #settingsForm button:hover {
       transform: translateY(-1px);
       box-shadow: 0 8px 18px rgba(15, 107, 91, 0.3);
     }
@@ -153,7 +153,7 @@
       font-weight: 600;
     }
 
-    #hud {
+    #infoWidget {
       position: fixed;
       left: 18px;
       bottom: 18px;
@@ -169,11 +169,11 @@
       animation: fadeIn 0.8s ease both 0.2s;
     }
 
-    #hudContent {
+    #infoContent {
       margin-top: 12px;
     }
 
-    #hud button {
+    #infoWidget button {
       margin-top: 8px;
       padding: 6px 10px;
       border-radius: 10px;
@@ -186,7 +186,7 @@
       cursor: pointer;
     }
 
-    #hudToggle {
+    #infoToggle {
       display: inline-flex;
       align-items: center;
       gap: 6px;
@@ -205,7 +205,7 @@
       z-index: 4;
     }
 
-    #hudToggleStatus {
+    #infoToggleStatus {
       display: none;
       font-family: var(--mono);
       font-size: 11px;
@@ -222,7 +222,7 @@
       z-index: 1;
     }
 
-    #hud strong {
+    #infoWidget strong {
       display: block;
       font-weight: 600;
       font-size: 12px;
@@ -232,7 +232,7 @@
       margin-bottom: 6px;
     }
 
-    #toolbarToggle {
+    #settingsToggle {
       display: inline-flex;
       align-items: center;
       justify-content: center;
@@ -252,11 +252,11 @@
       left: 12px;
     }
 
-    .toolbar-collapsed #toolbar {
+    .settings-collapsed #settingsWidget {
       display: none;
     }
 
-    #hudToggle {
+    #infoToggle {
       display: inline-flex;
       align-items: center;
       justify-content: center;
@@ -294,17 +294,17 @@
       font-weight: 600;
     }
 
-    .hud-hidden #hudContent {
+    .info-collapsed #infoContent {
       display: none;
     }
 
-    .hud-hidden #hud {
+    .info-collapsed #infoWidget {
       background: transparent;
       padding: 0;
       max-width: none;
     }
 
-    .hud-hidden #hudToggle {
+    .info-collapsed #infoToggle {
       position: static;
       border: none;
       background: transparent;
@@ -315,11 +315,11 @@
       font-family: var(--mono);
     }
 
-    .hud-hidden #hudToggleLabel {
+    .info-collapsed #infoToggleLabel {
       display: none;
     }
 
-    .hud-hidden #hudToggleStatus {
+    .info-collapsed #infoToggleStatus {
       display: inline;
     }
 
@@ -345,7 +345,7 @@
     }
 
     @media (max-width: 720px) {
-      #toolbar {
+      #settingsWidget {
         left: 12px;
         right: 12px;
       }
@@ -355,7 +355,7 @@
         align-items: flex-start;
       }
 
-      #hud {
+      #infoWidget {
         max-width: 240px;
       }
 
@@ -373,12 +373,18 @@
   <div id="app">
     <div id="viewport"></div>
 
-    <button id="toolbarToggle" type="button" aria-expanded="true">Hide</button>
-    <header id="toolbar">
+    <button id="settingsToggle" type="button" aria-expanded="true">Hide</button>
+    <header id="settingsWidget">
       <div class="brand">
         <h1>Cloth Simulation Lab</h1>
       </div>
-      <form id="controls">
+      <form id="settingsForm">
+        <label>
+          Preset
+          <select id="presetSelect">
+            <option value="">Custom</option>
+          </select>
+        </label>
         <label>
           Renderer
           <select id="rendererSelect"></select>
@@ -413,12 +419,7 @@
         </label>
         <label>
           Pin Edge
-          <select id="pinEdge">
-            <option value="top">Top</option>
-            <option value="bottom">Bottom</option>
-            <option value="left">Left</option>
-            <option value="right">Right</option>
-          </select>
+          <select id="pinEdge"></select>
         </label>
         <label>
           Max Simulation Step (s)
@@ -434,19 +435,18 @@
         </label>
         <button id="applyBtn" type="submit">Apply</button>
         <button id="resetSimBtn" type="button">Reset Simulation</button>
-        <button id="resetDefaultsBtn" type="button">Reset to Defaults</button>
       </form>
     </header>
     <a id="codeLink" href="https://github.com/subatomicglue/cloth-demo-html" target="_blank" rel="noopener">[github]</a>
 
-    <div id="hud">
-      <button id="hudToggle" type="button" aria-expanded="true">
-        <span id="hudToggleIcon">−</span>
-        <span id="hudToggleLabel">Hide</span>
-        <span id="hudToggleStatus"></span>
+    <div id="infoWidget">
+      <button id="infoToggle" type="button" aria-expanded="true">
+        <span id="infoToggleIcon">−</span>
+        <span id="infoToggleLabel">Hide</span>
+        <span id="infoToggleStatus"></span>
       </button>
-      <div id="hudContent">
-        <strong>Controls</strong>
+      <div id="infoContent">
+        <strong>Info</strong>
         Drag: rotate / grab cloth<br />
         Drag w/ <span class="touch-only">2fingers or </span>Ctrl: pan<br />
         <span class="touch-only">Pinch or </span>Scroll: zoom<br />

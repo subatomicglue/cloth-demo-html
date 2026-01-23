@@ -4,41 +4,74 @@
 // Top edge (j=0) is pinned by default.
 // Uses Verlet integration + iterative distance constraints (structural + optional shear).
 
+export const DEFAULT_INITIAL_JITTER = 0.08; // fraction of particle spacing
+
+function clamp(value, min, max) {
+  return Math.max(min, Math.min(max, value));
+}
+
 export class Cloth {
   // construct a new cloth with grid/solver settings.
   constructor({
     nx = 256,
     ny = 256,
+    size = null,
     spacing = 0.01,
     origin = [-1.28, 0.0, -1.28], // roughly centers a 256*0.01 patch near origin
     gravity = [0, -9.8, 0],
     damping = 0.995,
     constraintIters = 6,
     useShear = true,
-    pinEdge = "top", // "top" | "bottom" | "left" | "right"
+    orientation = "horizontal", // "horizontal" | "vertical"
+    autoPinTopEdge = false,
+    initialJitter = DEFAULT_INITIAL_JITTER,
     maxSubstep = 1 / 120,  // seconds
     maxAccumulated = 0.25, // seconds
   } = {}) {
     this.nx = nx;
     this.ny = ny;
     this.spacing = spacing;
+    this.size = size;
     this.gravity = gravity;
     this.damping = damping;
     this.constraintIters = constraintIters;
     this.useShear = useShear;
+    this.orientation = orientation;
+    this.maxColumn = Math.max(0, nx - 1);
+    this.maxRow = Math.max(0, ny - 1);
+    this.extentX = spacing * this.maxColumn;
+    this.extentZ = spacing * (ny - 1);
 
     const n = nx * ny;
     this.pos = new Float32Array(n * 3);
     this.prev = new Float32Array(n * 3);
     this.invMass = new Float32Array(n); // 0 = pinned, 1 = normal mass (uniform)
 
-    // init positions: horizontal sheet (x,z), y=0
+    const verticalFlagpole = orientation === "vertical";
+    const verticalPlaneZ = verticalFlagpole ? origin[2] + (ny - 1) * spacing * 0.5 : 0;
+    const verticalTopY = origin[1];
+
+    const jitterScale = Math.max(0, initialJitter) * spacing;
+    const randOffset = () => (Math.random() * 2 - 1) * jitterScale;
+
+    // init positions
     for (let j = 0; j < ny; j++) {
       for (let i = 0; i < nx; i++) {
         const idx = (j * nx + i) * 3;
-        const x = origin[0] + i * spacing;
-        const y = origin[1];
-        const z = origin[2] + j * spacing;
+        let x = origin[0] + i * spacing;
+        let y = origin[1];
+        let z = origin[2] + j * spacing;
+        if (verticalFlagpole) {
+          x = origin[0] + i * spacing;
+          y = verticalTopY - j * spacing;
+          z = verticalPlaneZ;
+        }
+        if (jitterScale > 0) {
+          x += randOffset();
+          y += randOffset();
+          z += randOffset();
+        }
+
         this.pos[idx + 0] = x;
         this.pos[idx + 1] = y;
         this.pos[idx + 2] = z;
@@ -51,12 +84,9 @@ export class Cloth {
       }
     }
 
-    // pin one edge
-    const pin = (i, j) => (this.invMass[j * nx + i] = 0.0);
-    if (pinEdge === "top") for (let i = 0; i < nx; i++) pin(i, 0);
-    if (pinEdge === "bottom") for (let i = 0; i < nx; i++) pin(i, ny - 1);
-    if (pinEdge === "left") for (let j = 0; j < ny; j++) pin(0, j);
-    if (pinEdge === "right") for (let j = 0; j < ny; j++) pin(nx - 1, j);
+    if (autoPinTopEdge) {
+      this.pinRow(0);
+    }
 
     // precompute triangle index buffer (shared by all renderers)
     this.indices = this._buildTriangleIndices();
@@ -117,6 +147,73 @@ export class Cloth {
       }
     }
     return new Uint32Array(edges);
+  }
+
+  getColumnCount() {
+    return this.nx;
+  }
+
+  getRowCount() {
+    return this.ny;
+  }
+
+  getExtentX() {
+    return this.extentX;
+  }
+
+  getExtentZ() {
+    return this.extentZ;
+  }
+
+  pinColumn(col, options = null) {
+    if (this.nx === 0) return;
+    const column = clamp(Math.round(col), 0, this.maxColumn);
+    const offset = this._resolveOffset(options);
+    for (let j = 0; j < this.ny; j++) {
+      this._pinParticle(column, j, offset);
+    }
+  }
+
+  pinRow(row, options = null) {
+    if (this.ny === 0) return;
+    const targetRow = clamp(Math.round(row), 0, this.maxRow);
+    const offset = this._resolveOffset(options);
+    for (let i = 0; i < this.nx; i++) {
+      this._pinParticle(i, targetRow, offset);
+    }
+  }
+
+  pinColumnAtRatio(ratio, options = null) {
+    if (!Number.isFinite(ratio)) return;
+    const column = Math.round(this.maxColumn * ratio);
+    this.pinColumn(column, options);
+  }
+
+  _pinParticle(i, j, offset) {
+    const idx = j * this.nx + i;
+    this.invMass[idx] = 0.0;
+    if (offset) {
+      this._applyOffset(idx * 3, offset);
+    }
+  }
+
+  _applyOffset(index, offset) {
+    const ox = offset[0] == null ? 0 : offset[0];
+    const oy = offset[1] == null ? 0 : offset[1];
+    const oz = offset[2] == null ? 0 : offset[2];
+    this.pos[index + 0] += ox;
+    this.pos[index + 1] += oy;
+    this.pos[index + 2] += oz;
+    this.prev[index + 0] += ox;
+    this.prev[index + 1] += oy;
+    this.prev[index + 2] += oz;
+  }
+
+  _resolveOffset(options) {
+    if (!options) return null;
+    if (Array.isArray(options)) return options;
+    if (Array.isArray(options.offset)) return options.offset;
+    return null;
   }
 
   // shared position buffer (Float32Array, xyz per vertex).
