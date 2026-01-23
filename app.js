@@ -194,7 +194,7 @@ function resetControlsFromDefaults(presetValue = "") {
 
 // when a Preset dropdown changes, it's data comes through here.
 // Applies the preset's query parameters to the controls and rebuilds the simulation.
-function applyPresetQuery(query, { preserveRenderer = true, presetId = null } = {}) {
+function applyPresetQuery(query, { preserveRenderer = true, presetId = null, preservePanels = true } = {}) {
   resetControlsFromDefaults(presetId || "");
   if (presetSelect && presetId != null) {
     presetSelect.value = presetId;
@@ -223,13 +223,15 @@ function applyPresetQuery(query, { preserveRenderer = true, presetId = null } = 
     }
   });
 
-  const collapsedValue = params.get("settingsCollapsed") ?? params.get("toolbarCollapsed");
-  if (collapsedValue != null) {
-    setSettingsCollapsed(parseFlag(collapsedValue));
-  }
-  const infoValue = params.get("infoCollapsed") ?? params.get("hudHidden");
-  if (infoValue != null) {
-    setInfoCollapsed(parseFlag(infoValue));
+  if (preservePanels) {
+    const collapsedValue = params.get("settingsCollapsed") ?? params.get("toolbarCollapsed");
+    if (collapsedValue != null) {
+      setSettingsCollapsed(parseFlag(collapsedValue));
+    }
+    const infoValue = params.get("infoCollapsed") ?? params.get("hudHidden");
+    if (infoValue != null) {
+      setInfoCollapsed(parseFlag(infoValue));
+    }
   }
 
   snapshotAllControls();
@@ -1157,7 +1159,7 @@ if (presetSelect) {
     const selectedId = presetSelect.value;
     const preset = PRESET_LOOKUP.get(selectedId);
     if (!preset || !preset.query) return;
-    applyPresetQuery(preset.query, { preserveRenderer: true, presetId: selectedId });
+    applyPresetQuery(preset.query, { preserveRenderer: true, presetId: selectedId, preservePanels: false });
   });
 }
 
