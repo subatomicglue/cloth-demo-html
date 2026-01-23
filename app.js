@@ -224,14 +224,10 @@ function applyPresetQuery(query, { preserveRenderer = true, presetId = null, pre
   });
 
   if (preservePanels) {
-    const collapsedValue = params.get("settingsCollapsed") ?? params.get("toolbarCollapsed");
-    if (collapsedValue != null) {
-      setSettingsCollapsed(parseFlag(collapsedValue));
-    }
-    const infoValue = params.get("infoCollapsed") ?? params.get("hudHidden");
-    if (infoValue != null) {
-      setInfoCollapsed(parseFlag(infoValue));
-    }
+    const collapsedValue = params.get("settingsCollapsed");
+    if (collapsedValue != null) setSettingsCollapsed(parseFlag(collapsedValue));
+    const infoValue = params.get("infoCollapsed");
+    if (infoValue != null) setInfoCollapsed(parseFlag(infoValue));
   }
 
   snapshotAllControls();
