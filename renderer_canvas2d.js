@@ -1,6 +1,7 @@
 import { createAxesOverlay } from "./axes_overlay.js";
 
 const RENDERER_NAME = "Canvas 2D";
+const RENDERER_BG = [0, 0, 0];
 
 // create a Canvas2D renderer instance.
 export function createRenderer({ container, cloth, camera, notify }) {
@@ -77,7 +78,8 @@ export function createRenderer({ container, cloth, camera, notify }) {
 
   // draw the current cloth state.
   function render() {
-    ctx.clearRect(0, 0, width, height);
+    ctx.fillStyle = `rgb(${RENDERER_BG[0]}, ${RENDERER_BG[1]}, ${RENDERER_BG[2]})`;
+    ctx.fillRect(0, 0, width, height);
 
     const basis = makeViewBasis();
     const n = pos.length / 3;
@@ -145,7 +147,16 @@ export function createRenderer({ container, cloth, camera, notify }) {
     return RENDERER_NAME;
   }
 
-  return { render, resize, getSize, dispose, getName };
+  function getBackgroundColor() {
+    return RENDERER_BG.slice();
+  }
+
+  function getBackgroundColor() {
+    return RENDERER_BG.slice();
+  }
+
+  return { render, resize, getSize, dispose, getName, getBackgroundColor };
 }
 
 createRenderer.getName = () => RENDERER_NAME;
+createRenderer.getBackgroundColor = () => RENDERER_BG.slice();

@@ -1,6 +1,8 @@
 import { createAxesOverlay } from "./axes_overlay.js";
 
 const RENDERER_NAME = "WebGL";
+const RENDERER_BG = [225, 242, 255];
+// const RENDERER_BG = [255, 128, 0]; // orange for testing (do not remove)
 
 // create a raw WebGL renderer instance.
 export function createRenderer({ container, cloth, camera, notify }) {
@@ -27,7 +29,7 @@ export function createRenderer({ container, cloth, camera, notify }) {
     };
   }
 
-  gl.clearColor(0.88, 0.95, 1.0, 1);
+  gl.clearColor(RENDERER_BG[0] / 255, RENDERER_BG[1] / 255, RENDERER_BG[2] / 255, 1);
   gl.enable(gl.DEPTH_TEST);
 
   const VS = `
@@ -221,7 +223,12 @@ void main() {
     return RENDERER_NAME;
   }
 
-  return { render, resize, getSize, dispose, getName };
+  function getBackgroundColor() {
+    return RENDERER_BG.slice();
+  }
+
+  return { render, resize, getSize, dispose, getName, getBackgroundColor };
 }
 
 createRenderer.getName = () => RENDERER_NAME;
+createRenderer.getBackgroundColor = () => RENDERER_BG.slice();

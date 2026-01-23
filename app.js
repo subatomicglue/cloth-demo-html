@@ -77,6 +77,42 @@ const rendererFactories = {
   webgl: createWebGL,
 };
 
+function invertRgb(rgb) {
+  if (!rgb) return null;
+  return [
+    255 - rgb[0],
+    255 - rgb[1],
+    255 - rgb[2],
+  ];
+}
+
+function rgbToCss(rgb) {
+  if (!rgb) return null;
+  return `rgb(${rgb[0]}, ${rgb[1]}, ${rgb[2]})`;
+}
+
+function getActiveBackgroundColor() {
+  if (renderer) return renderer.getBackgroundColor();
+  return rendererFactories[activeRendererType].getBackgroundColor();
+}
+
+function updateControlsWidgetColors(bg) {
+  const hudMinimized = document.body.classList.contains("hud-hidden");
+
+  // Controls Widget is maximized: restore the status text color.
+  if (!hudMinimized) {
+    if (hudToggleIcon) hudToggleIcon.style.color = "#fff";
+    if (hudToggleStatus) hudToggleStatus.style.color = "#fbd3a4";
+    return;
+  }
+
+  // Controls Widget is minimized: invert the status text color relative to the renderer's background for visibility.
+  const inverted = invertRgb( bg );
+  const cssColor = rgbToCss(inverted);
+  if (hudToggleIcon && cssColor) hudToggleIcon.style.color = cssColor;
+  if (hudToggleStatus && cssColor) hudToggleStatus.style.color = cssColor;
+}
+
 let cloth = null;
 let renderer = null;
 let activeRendererType = "three";
@@ -424,6 +460,7 @@ function updateStatus(params) {
   const text = `${rendererLabel} | ${sizeText} | ${fpsDisplay}FPS`;
   status.textContent = text;
   if (hudToggleStatus) hudToggleStatus.textContent = text;
+  updateControlsWidgetColors(getActiveBackgroundColor());
 }
 
 function setToolbarCollapsed(collapsed) {
@@ -439,6 +476,7 @@ function setHudHidden(hidden) {
   if (hudToggleIcon) hudToggleIcon.textContent = hidden ? '+' : '−';
   if (hudToggleLabel) hudToggleLabel.textContent = hidden ? 'Info' : 'Hide';
   hudToggle.setAttribute("aria-expanded", hidden ? "false" : "true");
+  updateControlsWidgetColors(getActiveBackgroundColor());
 }
 
 function updateWindToggle() {
@@ -559,6 +597,7 @@ async function buildRenderer(rebuildCloth = true) {
   if (renderer && renderer.resize) renderer.resize();
   updateStatus(currentParams || params);
   updateWindToggle();
+  updateControlsWidgetColors(getActiveBackgroundColor());
 }
 
 function normalize(v) {

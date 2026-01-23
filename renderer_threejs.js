@@ -2,6 +2,7 @@ import * as THREE from "https://unpkg.com/three@0.160.0/build/three.module.js";
 import { createAxesOverlay } from "./axes_overlay.js";
 
 const RENDERER_NAME = "three.js";
+const RENDERER_BG = [255, 255, 255];
 
 // create a three.js renderer instance.
 export function createRenderer({ container, cloth, camera, notify }) {
@@ -12,7 +13,7 @@ export function createRenderer({ container, cloth, camera, notify }) {
   container.appendChild(canvas);
 
   const renderer = new THREE.WebGLRenderer({ canvas, antialias: true });
-  renderer.setClearColor(0xffffff, 1);
+  renderer.setClearColor(new THREE.Color( RENDERER_BG[0] / 255, RENDERER_BG[1] / 255, RENDERER_BG[2] / 255 ), 1);
 
   const scene = new THREE.Scene();
   const cam = new THREE.PerspectiveCamera(
@@ -118,7 +119,12 @@ export function createRenderer({ container, cloth, camera, notify }) {
     return RENDERER_NAME;
   }
 
-  return { render, resize, getSize, dispose, getName };
+  function getBackgroundColor() {
+    return RENDERER_BG.slice();
+  }
+
+  return { render, resize, getSize, dispose, getName, getBackgroundColor };
 }
 
 createRenderer.getName = () => RENDERER_NAME;
+createRenderer.getBackgroundColor = () => RENDERER_BG.slice();
