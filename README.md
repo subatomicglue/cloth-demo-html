@@ -10,13 +10,13 @@
 - Toast notifications for renderer status and warnings.
 - Visual aids: on-screen XYZ axes widget for orientation.
 
-## Table of Contents (Local Files)
+## Source
 
-- [Unified Demo + Renderer Switcher](./index.html)
+- [index.html](./index.html)
 
-## Live Demo (GitHub Pages)
+## Live Demo
 
-- [Unified Demo + Renderer Switcher](https://subatomicglue.github.io/cloth-demo-html/index.html)
+- [Cloth Demo](https://subatomicglue.github.io/cloth-demo-html/index.html)
 
 ## What This Demo Teaches
 
