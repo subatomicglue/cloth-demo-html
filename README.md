@@ -1,5 +1,7 @@
 # Cloth Simulation Demos
 
+[<img src="hero.png" alt="live demo" title="live demo" width="200">](https://subatomicglue.github.io/cloth-demo-html/index.html)
+
 ## What This Teaches
 
 - Verlet integration with position-based constraints (structural + shear) for stable cloth.
